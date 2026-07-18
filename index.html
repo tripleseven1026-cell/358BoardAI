@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>358BoardAI Pro v4.0 Beta</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;padding:10px;background:#eef3f7;color:#222}
+.card{background:#fff;border-radius:14px;padding:12px;margin:10px 0;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+h1{font-size:23px;margin:0 0 4px}h2{font-size:18px;margin:0 0 10px}
+.small{font-size:12px;color:#667085}.notice{background:#fff8e1;border-left:5px solid #f9a825;padding:10px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+input,textarea,button,select{width:100%;padding:10px;font-size:15px;border-radius:9px}
+input,textarea,select{border:1px solid #b8c1cc}textarea{min-height:150px}
+button{border:0;background:#1565c0;color:#fff;font-weight:800;margin-top:8px}
+.alt{background:#00897b}.gray{background:#5f6872}.orange{background:#ef6c00}
+.preview{background:#111;border-radius:10px;overflow:auto;max-height:55vh;text-align:center}
+canvas{max-width:100%;background:#fff}
+.track{height:18px;background:#e4e7ec;border-radius:9px;overflow:hidden;margin-top:8px}.bar{height:100%;width:0;background:#1565c0}
+.scroll{overflow-x:auto}
+table{width:100%;min-width:1000px;border-collapse:collapse;font-size:12px}
+th,td{border:1px solid #cfd6de;padding:5px;text-align:center}
+td input{padding:7px;font-size:14px}
+.ok{color:#087b32;font-weight:800}.bad{color:#b00020;font-weight:800}
+.rank{font-size:36px;font-weight:900}.good{color:#087b32;font-weight:800}.warn{color:#a15c00;font-weight:800}.stop{color:#b00020;font-weight:800}
+.reason{border-left:5px solid #1565c0;background:#f7f9fc;padding:10px;margin-top:10px}
+@media(max-width:800px){.grid,.grid3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="card">
+<h1>🚤 358BoardAI Pro v4.0 β 統合版</h1>
+<div class="small">レース切り出し・安全OCR・AI助言・成績分析を一本化</div>
+</div>
+
+<div class="card">
+<h2>① 出走表画像を選ぶ</h2>
+<div class="notice">1枚に複数レースがある場合、分析したいレースを選んで、その部分だけOCRします。</div>
+<input id="imageFile" type="file" accept="image/*">
+<button class="alt" onclick="loadImage()">画像を読み込む</button>
+</div>
+
+<div class="card">
+<h2>② レース部分を切り出す</h2>
+<div class="grid3">
+<div><label>レース</label>
+<select id="racePreset">
+<option value="1">1R</option><option value="2">2R</option><option value="3">3R</option>
+<option value="4">4R</option><option value="5">5R</option><option value="6">6R</option>
+</select></div>
+<div><label>上余白補正</label><input id="topAdjust" type="range" min="-80" max="80" value="0"></div>
+<div><label>高さ補正</label><input id="heightAdjust" type="range" min="-80" max="120" value="0"></div>
+</div>
+<div class="grid">
+<button onclick="cropRace()">選んだレースを切り出す</button>
+<button class="gray" onclick="showFull()">全体表示へ戻す</button>
+</div>
+<div class="preview"><canvas id="previewCanvas"></canvas></div>
+</div>
+
+<div class="card">
+<h2>③ OCR</h2>
+<div class="grid">
+<button class="alt" onclick="prepareOCR()">白黒・2倍補正</button>
+<button onclick="runOCR()">切り出し部分をOCR</button>
+</div>
+<div class="preview"><canvas id="ocrCanvas"></canvas></div>
+<div class="track"><div class="bar" id="bar"></div></div>
+<div id="status" class="small">待機中</div>
+</div>
+
+<div class="card">
+<h2>④ OCR結果</h2>
+<textarea id="ocrText"></textarea>
+<button class="orange" onclick="extractNumbers()">数値だけ候補反映</button>
+<div class="small">選手名は安全のため手入力です。候補値は必ず確認してください。</div>
+</div>
+
+<div class="card">
+<h2>⑤ レース情報</h2>
+<div class="grid">
+<input id="place" placeholder="競艇場">
+<input id="race" placeholder="レース">
+<select id="raceType">
+<option value="女子戦" selected>女子戦</option>
+<option value="一般戦">一般戦</option>
+</select>
+<input id="wind" type="number" value="2" placeholder="風速">
+<input id="wave" type="number" value="2" placeholder="波高">
+<input id="budget" type="number" value="1000" placeholder="予算">
+</div>
+</div>
+
+<div class="card">
+<h2>⑥ 6艇データ確認</h2>
+<div class="scroll"><table>
+<tr><th>艇</th><th>選手名</th><th>全国</th><th>当地</th><th>モーター%</th><th>ボート%</th><th>平均ST</th><th>進入</th><th>確認</th><th>指数</th></tr>
+<tbody id="rows"></tbody>
+</table></div>
+<div class="grid">
+<button class="orange" onclick="checkAll()">入力チェック</button>
+<button onclick="analyze()">AI分析</button>
+</div>
+</div>
+
+<div class="card" id="result">ここに分析結果が表示されます。</div>
+
+<div class="card">
+<h2>⑦ レース結果と成績</h2>
+<div class="grid">
+<div>1着<input id="res1" type="number" min="1" max="6"></div>
+<div>2着<input id="res2" type="number" min="1" max="6"></div>
+<div>3着<input id="res3" type="number" min="1" max="6"></div>
+<div>購入金額<input id="betAmount" type="number" value="1000"></div>
+<div>払戻金額<input id="returnAmount" type="number" value="0"></div>
+</div>
+<button class="alt" onclick="saveResult()">結果を保存</button>
+<div id="hitResult" class="small"></div>
+</div>
+
+<div class="card">
+<h2>⑧ 成績ダッシュボード</h2>
+<div id="stats">記録なし</div>
+</div>
+
+<div class="card">
+<h2>⑨ AIランク別成績</h2>
+<div id="rankStats">記録なし</div>
+</div>
+
+<div class="card">
+<h2>⑩ 判定別成績</h2>
+<div id="judgeStats">記録なし</div>
+</div>
+
+<div class="card">
+<h2>⑪ 競艇場別成績</h2>
+<div id="placeStats">記録なし</div>
+</div>
+
+<div class="card">
+<h2>⑫ 女子戦・一般戦別成績</h2>
+<div id="typeStats">記録なし</div>
+</div>
+
+<div class="card">
+<h2>⑬ 履歴管理</h2>
+<button class="gray" onclick="exportHistory()">履歴をCSVで保存</button>
+<button class="orange" onclick="clearHistory()">履歴を全消去</button>
+</div>
+
+
+<script>
+for(let i=1;i<=6;i++){
+ rows.insertAdjacentHTML("beforeend",`<tr><td>${i}</td><td><input id="name${i}" placeholder="手入力"></td><td><input id="win${i}" type="number" step="0.01"></td><td><input id="local${i}" type="number" step="0.01"></td><td><input id="motor${i}" type="number" step="0.1"></td><td><input id="boat${i}" type="number" step="0.1"></td><td><input id="st${i}" type="number" step="0.01"></td><td><input id="course${i}" type="number" value="${i}"></td><td id="check${i}">未確認</td><td id="score${i}">-</td></tr>`);
+}
+const n=id=>Number(document.getElementById(id).value);
+const t=id=>document.getElementById(id).value||"";
+const s=(id,v)=>document.getElementById(id).value=v;
+
+let sourceImage=null;
+let crop={x:0,y:0,w:0,h:0};
+let lastPrediction=null;
+
+function loadImage(){
+ const f=imageFile.files[0];
+ if(!f)return alert("画像を選択してください");
+ const r=new FileReader();
+ r.onload=e=>{
+   const img=new Image();
+   img.onload=()=>{
+     sourceImage=img;
+     crop={x:0,y:0,w:img.width,h:img.height};
+     drawCrop();
+     status.textContent="画像読込完了";
+   };
+   img.src=e.target.result;
+ };
+ r.readAsDataURL(f);
+}
+
+function drawCrop(){
+ if(!sourceImage)return;
+ previewCanvas.width=crop.w;
+ previewCanvas.height=crop.h;
+ previewCanvas.getContext("2d").drawImage(sourceImage,crop.x,crop.y,crop.w,crop.h,0,0,crop.w,crop.h);
+}
+
+function cropRace(){
+ if(!sourceImage)return alert("先に画像を読み込んでください");
+ const r=Number(racePreset.value);
+ // この形式は上部ヘッダー約8%、下部約9%、中央に6レース
+ const usableTop=Math.round(sourceImage.height*0.075);
+ const usableHeight=Math.round(sourceImage.height*0.79);
+ const baseH=Math.round(usableHeight/6);
+ const y=Math.max(0,usableTop+(r-1)*baseH+Number(topAdjust.value));
+ const h=Math.max(120,baseH+Number(heightAdjust.value));
+ crop={x:0,y:y,w:sourceImage.width,h:Math.min(h,sourceImage.height-y)};
+ drawCrop();
+ race.value=r+"R";
+}
+
+function showFull(){
+ if(!sourceImage)return;
+ crop={x:0,y:0,w:sourceImage.width,h:sourceImage.height};
+ drawCrop();
+}
+
+function prepareOCR(){
+ if(!sourceImage)return alert("画像を読み込んでください");
+ const scale=2;
+ ocrCanvas.width=crop.w*scale;
+ ocrCanvas.height=crop.h*scale;
+ const ctx=ocrCanvas.getContext("2d");
+ ctx.drawImage(sourceImage,crop.x,crop.y,crop.w,crop.h,0,0,ocrCanvas.width,ocrCanvas.height);
+ const data=ctx.getImageData(0,0,ocrCanvas.width,ocrCanvas.height);
+ const d=data.data;
+ for(let i=0;i<d.length;i+=4){
+   let y=.299*d[i]+.587*d[i+1]+.114*d[i+2];
+   y=y>=185?255:0;
+   d[i]=d[i+1]=d[i+2]=y;
+ }
+ ctx.putImageData(data,0,0);
+ status.textContent="OCR用補正完了";
+}
+
+async function runOCR(){
+ if(ocrCanvas.width<2)return alert("先に白黒・2倍補正をしてください");
+ try{
+   status.textContent="OCR準備中";
+   const worker=await Tesseract.createWorker("jpn+eng",1,{
+     logger:m=>{
+       if(m.status)status.textContent=m.status;
+       if(typeof m.progress==="number")bar.style.width=Math.round(m.progress*100)+"%";
+     }
+   });
+   const ret=await worker.recognize(ocrCanvas);
+   ocrText.value=ret.data.text||"";
+   await worker.terminate();
+   status.textContent="OCR完了";
+   bar.style.width="100%";
+ }catch(e){
+   status.textContent="OCR失敗";
+   alert("OCRに失敗しました。インターネット接続を確認してください。");
+ }
+}
+
+function extractNumbers(){
+ const lines=ocrText.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+ let boatNo=1;
+ for(const line of lines){
+   if(boatNo>6)break;
+   const nums=(line.match(/\d+\.\d+|\d+/g)||[]).map(Number);
+   if(nums.length<3)continue;
+   const rates=nums.filter(x=>x>=1&&x<=10);
+   const percents=nums.filter(x=>x>=10&&x<=100);
+   const sts=nums.filter(x=>x>0&&x<0.5);
+   if(rates[0]!=null)s("win"+boatNo,rates[0]);
+   if(rates[1]!=null)s("local"+boatNo,rates[1]);
+   if(percents[0]!=null)s("motor"+boatNo,percents[0]);
+   if(percents[1]!=null)s("boat"+boatNo,percents[1]);
+   if(sts[0]!=null)s("st"+boatNo,sts[0]);
+   boatNo++;
+ }
+ checkAll(false);
+ alert((boatNo-1)+"艇分の数値候補を反映しました");
+}
+
+function checkBoat(i){
+ const p=[];
+ if(!t("name"+i))p.push("選手名");
+ if(!Number.isFinite(n("win"+i))||n("win"+i)<1||n("win"+i)>10)p.push("全国");
+ if(!Number.isFinite(n("local"+i))||n("local"+i)<0||n("local"+i)>10)p.push("当地");
+ if(!Number.isFinite(n("motor"+i))||n("motor"+i)<0||n("motor"+i)>100)p.push("モーター");
+ if(!Number.isFinite(n("boat"+i))||n("boat"+i)<0||n("boat"+i)>100)p.push("ボート");
+ if(!Number.isFinite(n("st"+i))||n("st"+i)<0||n("st"+i)>.5)p.push("ST");
+ const e=document.getElementById("check"+i);
+ if(!p.length){e.textContent="正常";e.className="ok";return true}
+ e.textContent="要確認:"+p.join("・");e.className="bad";return false;
+}
+function checkAll(show=true){
+ let ok=0;for(let i=1;i<=6;i++)if(checkBoat(i))ok++;
+ if(show)alert(`正常:${ok}艇 / 要確認:${6-ok}艇`);
+ return ok===6;
+}
+function scoreRate(x){return Math.max(0,Math.min(100,(x-3)/5*100))}
+function pct(x){return Math.max(0,Math.min(100,x*2))}
+function stsc(x){if(x<=.08)return 100;if(x<=.12)return 92;if(x<=.16)return 82;if(x<=.20)return 68;return 48}
+function analyze(){
+ if(!checkAll(false))return alert("要確認項目があります。すべて直してから分析してください。");
+ const d=[];
+ for(let i=1;i<=6;i++){
+   const female=t("raceType")==="女子戦";
+   let sc=Math.round(
+     scoreRate(n("win"+i))*(female?.28:.32)+
+     scoreRate(n("local"+i))*(female?.14:.12)+
+     pct(n("motor"+i))*(female?.26:.24)+
+     pct(n("boat"+i))*.12+
+     stsc(n("st"+i))*(female?.20:.20)
+   );
+   document.getElementById("score"+i).textContent=sc;
+   d.push({b:i,s:sc,name:t("name"+i)});
+ }
+ d.sort((a,b)=>b.s-a.s);
+ const a=d[0],b=d[1],c=d[2],diff=a.s-b.s;
+ const r=a.s>=90&&diff>=10?"SSS":a.s>=84&&diff>=6?"S":a.s>=79&&diff>=4?"A":a.s>=71?"B":"C";
+ const judge=["SSS","S"].includes(r)?"勝負候補":r==="A"?"買い候補":r==="B"?"慎重":"見送り";
+ const cls=["SSS","S","A"].includes(r)?"good":r==="B"?"warn":"stop";
+ lastPrediction={
+   rank:r,
+   judge:judge,
+   first:a.b,
+   second:b.b,
+   third:c.b,
+   niren:`${a.b}-${b.b}`,
+   sanren1:`${a.b}-${b.b}-${c.b}`,
+   sanren2:`${a.b}-${c.b}-${b.b}`,
+   confidence:Math.max(40,Math.min(98,Math.round(55+a.s*.25+diff*2))),
+   raceType:t("raceType")
+ };
+ const advice=[];
+ if(diff>=8)advice.push("上位艇と2位以下の指数差が大きく、軸候補が明確です。");
+ else advice.push("上位艇の指数差が小さいため、買い目を広げすぎないよう注意してください。");
+ if(Number(wind.value)>=5)advice.push("風が強いため、直前の展示気配を優先してください。");
+ if(t("raceType")==="女子戦")advice.push("女子戦モードではモーター・当地成績をやや重く評価しています。");
+ if(r==="C")advice.push("見送り判定です。無理に購入しない選択を優先してください。");
+
+ result.innerHTML=`<div class="rank ${cls}">${r}</div>
+ <b>${t("place")||"競艇場未入力"} ${t("race")}・${t("raceType")}</b><br>
+ <span class="${cls}">${judge}</span><br>
+ AI信頼度：<b>${lastPrediction.confidence}%</b><br><br>
+ 1位:${a.b}号艇 ${a.name}（${a.s}）<br>
+ 2位:${b.b}号艇 ${b.name}（${b.s}）<br>
+ 3位:${c.b}号艇 ${c.name}（${c.s}）
+ <div class="reason"><b>AIアドバイス</b><br>・${advice.join("<br>・")}</div>`;
+}
+
+function getHistory(){
+  return JSON.parse(localStorage.getItem("358v32history")||"[]");
+}
+function saveResult(){
+  if(!lastPrediction){
+    alert("先にAI分析をしてください");
+    return;
+  }
+  const r1=Number(document.getElementById("res1").value);
+  const r2=Number(document.getElementById("res2").value);
+  const r3=Number(document.getElementById("res3").value);
+  if(!r1||!r2||!r3){
+    alert("1着・2着・3着を入力してください");
+    return;
+  }
+  const actualNiren=`${r1}-${r2}`;
+  const actualSanren=`${r1}-${r2}-${r3}`;
+  const nirenHit=actualNiren===lastPrediction.niren;
+  const sanrenHit=[lastPrediction.sanren1,lastPrediction.sanren2].includes(actualSanren);
+  const history=getHistory();
+  history.push({
+    date:new Date().toLocaleString("ja-JP"),
+    place:t("place"),
+    race:t("race"),
+    rank:lastPrediction.rank,
+    judge:lastPrediction.judge || "",
+    confidence:lastPrediction.confidence || 0,
+    raceType:lastPrediction.raceType || t("raceType"),
+    predictedNiren:lastPrediction.niren,
+    predictedSanren1:lastPrediction.sanren1,
+    predictedSanren2:lastPrediction.sanren2,
+    actual:actualSanren,
+    nirenHit,
+    sanrenHit,
+    bet:Number(document.getElementById("betAmount").value)||0,
+    returned:Number(document.getElementById("returnAmount").value)||0
+  });
+  localStorage.setItem("358v32history",JSON.stringify(history));
+  document.getElementById("hitResult").innerHTML=
+    `2連単：${nirenHit?"✅ 的中":"❌ 不的中"}<br>3連単：${sanrenHit?"✅ 的中":"❌ 不的中"}`;
+  updateStats();
+  alert("結果を保存しました");
+}
+function updateStats(){
+  const h=getHistory();
+  const el=document.getElementById("stats");
+  const rankEl=document.getElementById("rankStats");
+  const judgeEl=document.getElementById("judgeStats");
+  const placeEl=document.getElementById("placeStats");
+  const typeEl=document.getElementById("typeStats");
+
+  if(!h.length){
+    el.textContent="記録なし";
+    rankEl.textContent="記録なし";
+    judgeEl.textContent="記録なし";
+    placeEl.textContent="記録なし";
+    typeEl.textContent="記録なし";
+    return;
+  }
+
+  const n2=h.filter(x=>x.nirenHit).length;
+  const s3=h.filter(x=>x.sanrenHit).length;
+  const bet=h.reduce((a,x)=>a+(x.bet||0),0);
+  const ret=h.reduce((a,x)=>a+(x.returned||0),0);
+  const profit=ret-bet;
+
+  el.innerHTML=
+    `記録数：${h.length}<br>`+
+    `2連単的中率：${Math.round(n2/h.length*100)}%<br>`+
+    `3連単的中率：${Math.round(s3/h.length*100)}%<br>`+
+    `回収率：${bet?Math.round(ret/bet*100):0}%<br>`+
+    `収支：${profit>=0?"+":""}${profit}円`;
+
+  const ranks=["SSS","SS","S","A","B","C"];
+  const rankRows=[];
+  for(const r of ranks){
+    const items=h.filter(x=>x.rank===r);
+    if(!items.length) continue;
+    const rb=items.reduce((a,x)=>a+(x.bet||0),0);
+    const rr=items.reduce((a,x)=>a+(x.returned||0),0);
+    const rh=items.filter(x=>x.sanrenHit).length;
+    rankRows.push(
+      `<b>${r}</b>：${items.length}件 / 3連単的中率 ${Math.round(rh/items.length*100)}% / 回収率 ${rb?Math.round(rr/rb*100):0}%`
+    );
+  }
+  rankEl.innerHTML=rankRows.length?rankRows.join("<br>"):"記録なし";
+
+  const groups=[
+    ["勝負候補",["SSS","SS","S"]],
+    ["買い候補",["A"]],
+    ["慎重",["B"]],
+    ["見送り",["C"]]
+  ];
+  const judgeRows=[];
+  for(const [label,ranksInGroup] of groups){
+    const items=h.filter(x=>ranksInGroup.includes(x.rank));
+    if(!items.length) continue;
+    const gb=items.reduce((a,x)=>a+(x.bet||0),0);
+    const gr=items.reduce((a,x)=>a+(x.returned||0),0);
+    const gh=items.filter(x=>x.sanrenHit).length;
+    judgeRows.push(
+      `<b>${label}</b>：${items.length}件 / 3連単的中率 ${Math.round(gh/items.length*100)}% / 回収率 ${gb?Math.round(gr/gb*100):0}%`
+    );
+  }
+  judgeEl.innerHTML=judgeRows.length?judgeRows.join("<br>"):"記録なし";
+
+  const places=[...new Set(h.map(x=>x.place||"未入力"))];
+  placeEl.innerHTML=places.map(p=>{
+    const items=h.filter(x=>(x.place||"未入力")===p);
+    const pb=items.reduce((a,x)=>a+(x.bet||0),0);
+    const pr=items.reduce((a,x)=>a+(x.returned||0),0);
+    const ph=items.filter(x=>x.sanrenHit).length;
+    return `<b>${p}</b>：${items.length}件 / 3連単的中率 ${Math.round(ph/items.length*100)}% / 回収率 ${pb?Math.round(pr/pb*100):0}%`;
+  }).join("<br>");
+
+  const types=["女子戦","一般戦"];
+  const typeRows=[];
+  for(const type of types){
+    const items=h.filter(x=>(x.raceType||"女子戦")===type);
+    if(!items.length)continue;
+    const tb=items.reduce((a,x)=>a+(x.bet||0),0);
+    const tr=items.reduce((a,x)=>a+(x.returned||0),0);
+    const th=items.filter(x=>x.sanrenHit).length;
+    typeRows.push(`<b>${type}</b>：${items.length}件 / 3連単的中率 ${Math.round(th/items.length*100)}% / 回収率 ${tb?Math.round(tr/tb*100):0}%`);
+  }
+  typeEl.innerHTML=typeRows.length?typeRows.join("<br>"):"記録なし";
+}
+function clearHistory(){
+  if(confirm("成績履歴をすべて消去しますか？")){
+    localStorage.removeItem("358v32history");
+    updateStats();
+  }
+}
+function exportHistory(){
+  const h=getHistory();
+  if(!h.length){
+    alert("保存する履歴がありません");
+    return;
+  }
+  const head=["日時","競艇場","レース","種別","ランク","判定","信頼度","予想2連単","予想3連単1","予想3連単2","実際","2連単的中","3連単的中","購入","払戻"];
+  const lines=[head.join(",")];
+  for(const x of h){
+    lines.push([
+      x.date,x.place,x.race,x.raceType||"",x.rank,x.judge||"",x.confidence||0,x.predictedNiren,x.predictedSanren1,x.predictedSanren2,x.actual,
+      x.nirenHit?"的中":"不的中",x.sanrenHit?"的中":"不的中",x.bet,x.returned
+    ].map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(","));
+  }
+  const blob=new Blob(["\uFEFF"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="358BoardAI_history.csv";
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+updateStats();
+
+</script>
+</body>
+</html>
