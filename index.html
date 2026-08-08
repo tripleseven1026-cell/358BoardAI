@@ -1,500 +1,770 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>358BoardAI Pro v4.0 Beta</title>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<style>
-*{box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;padding:10px;background:#eef3f7;color:#222}
-.card{background:#fff;border-radius:14px;padding:12px;margin:10px 0;box-shadow:0 2px 8px rgba(0,0,0,.08)}
-h1{font-size:23px;margin:0 0 4px}h2{font-size:18px;margin:0 0 10px}
-.small{font-size:12px;color:#667085}.notice{background:#fff8e1;border-left:5px solid #f9a825;padding:10px}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-input,textarea,button,select{width:100%;padding:10px;font-size:15px;border-radius:9px}
-input,textarea,select{border:1px solid #b8c1cc}textarea{min-height:150px}
-button{border:0;background:#1565c0;color:#fff;font-weight:800;margin-top:8px}
-.alt{background:#00897b}.gray{background:#5f6872}.orange{background:#ef6c00}
-.preview{background:#111;border-radius:10px;overflow:auto;max-height:55vh;text-align:center}
-canvas{max-width:100%;background:#fff}
-.track{height:18px;background:#e4e7ec;border-radius:9px;overflow:hidden;margin-top:8px}.bar{height:100%;width:0;background:#1565c0}
-.scroll{overflow-x:auto}
-table{width:100%;min-width:1000px;border-collapse:collapse;font-size:12px}
-th,td{border:1px solid #cfd6de;padding:5px;text-align:center}
-td input{padding:7px;font-size:14px}
-.ok{color:#087b32;font-weight:800}.bad{color:#b00020;font-weight:800}
-.rank{font-size:36px;font-weight:900}.good{color:#087b32;font-weight:800}.warn{color:#a15c00;font-weight:800}.stop{color:#b00020;font-weight:800}
-.reason{border-left:5px solid #1565c0;background:#f7f9fc;padding:10px;margin-top:10px}
-@media(max-width:800px){.grid,.grid3{grid-template-columns:1fr}}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#08111f">
+  <meta name="description" content="358BoardAI - 女子レース特化・的中率重視の競艇予想支援システム">
+  <title>358BoardAI | 競艇予想AI</title>
+
+  <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
+  <noscript>
+    <div class="noscript-message">
+      358BoardAIを使用するには、ブラウザのJavaScriptを有効にしてください。
+    </div>
+  </noscript>
 
-<div class="card">
-<h1>🚤 358BoardAI Pro v4.0 β 統合版</h1>
-<div class="small">レース切り出し・安全OCR・AI助言・成績分析を一本化</div>
-</div>
+  <div id="app" class="app-shell">
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">358</div>
+        <div>
+          <h1>358BoardAI</h1>
+          <p>女子レース特化・的中率重視</p>
+        </div>
+      </div>
 
-<div class="card">
-<h2>① 出走表画像を選ぶ</h2>
-<div class="notice">1枚に複数レースがある場合、分析したいレースを選んで、その部分だけOCRします。</div>
-<input id="imageFile" type="file" accept="image/*">
-<button class="alt" onclick="loadImage()">画像を読み込む</button>
-</div>
+      <div class="header-status">
+        <span id="systemStatus" class="status-badge status-ready">入力待ち</span>
+        <button id="openSettingsButton" class="icon-button" type="button" aria-label="設定を開く">
+          設定
+        </button>
+      </div>
+    </header>
 
-<div class="card">
-<h2>② レース部分を切り出す</h2>
-<div class="grid3">
-<div><label>レース</label>
-<select id="racePreset">
-<option value="1">1R</option><option value="2">2R</option><option value="3">3R</option>
-<option value="4">4R</option><option value="5">5R</option><option value="6">6R</option>
-</select></div>
-<div><label>上余白補正</label><input id="topAdjust" type="range" min="-80" max="80" value="0"></div>
-<div><label>高さ補正</label><input id="heightAdjust" type="range" min="-80" max="120" value="0"></div>
-</div>
-<div class="grid">
-<button onclick="cropRace()">選んだレースを切り出す</button>
-<button class="gray" onclick="showFull()">全体表示へ戻す</button>
-</div>
-<div class="preview"><canvas id="previewCanvas"></canvas></div>
-</div>
+    <nav class="main-navigation" aria-label="メインメニュー">
+      <button class="nav-button is-active" type="button" data-screen="predictionScreen">
+        予想
+      </button>
+      <button class="nav-button" type="button" data-screen="historyScreen">
+        履歴
+      </button>
+      <button class="nav-button" type="button" data-screen="analysisScreen">
+        分析
+      </button>
+    </nav>
 
-<div class="card">
-<h2>③ OCR</h2>
-<div class="grid">
-<button class="alt" onclick="prepareOCR()">白黒・2倍補正</button>
-<button onclick="runOCR()">切り出し部分をOCR</button>
-</div>
-<div class="preview"><canvas id="ocrCanvas"></canvas></div>
-<div class="track"><div class="bar" id="bar"></div></div>
-<div id="status" class="small">待機中</div>
-</div>
+    <main class="main-content">
+      <!-- 予想画面 -->
+      <section id="predictionScreen" class="screen is-active" aria-labelledby="predictionTitle">
+        <div class="screen-heading">
+          <div>
+            <h2 id="predictionTitle">レース予想</h2>
+            <p>出走情報を入力し、AI総合評価と買い目を算出します。</p>
+          </div>
+          <button id="resetRaceButton" class="secondary-button" type="button">
+            入力を初期化
+          </button>
+        </div>
 
-<div class="card">
-<h2>④ OCR結果</h2>
-<textarea id="ocrText"></textarea>
-<button class="orange" onclick="extractNumbers()">数値だけ候補反映</button>
-<div class="small">選手名は安全のため手入力です。候補値は必ず確認してください。</div>
-</div>
+        <section class="panel race-settings-panel" aria-labelledby="raceSettingsTitle">
+          <div class="panel-heading">
+            <h3 id="raceSettingsTitle">レース設定</h3>
+          </div>
 
-<div class="card">
-<h2>⑤ レース情報</h2>
-<div class="grid">
-<input id="place" placeholder="競艇場">
-<input id="race" placeholder="レース">
-<select id="raceType">
-<option value="女子戦" selected>女子戦</option>
-<option value="一般戦">一般戦</option>
-</select>
-<input id="wind" type="number" value="2" placeholder="風速">
-<input id="wave" type="number" value="2" placeholder="波高">
-<input id="budget" type="number" value="1000" placeholder="予算">
-</div>
-</div>
+          <div class="form-grid race-settings-grid">
+            <label class="form-field">
+              <span>開催日</span>
+              <input id="raceDate" name="raceDate" type="date" required>
+            </label>
 
-<div class="card">
-<h2>⑥ 6艇データ確認</h2>
-<div class="scroll"><table>
-<tr><th>艇</th><th>選手名</th><th>全国</th><th>当地</th><th>モーター%</th><th>ボート%</th><th>平均ST</th><th>進入</th><th>確認</th><th>指数</th></tr>
-<tbody id="rows"></tbody>
-</table></div>
-<div class="grid">
-<button class="orange" onclick="checkAll()">入力チェック</button>
-<button onclick="analyze()">AI分析</button>
-</div>
-</div>
+            <label class="form-field">
+              <span>開催場</span>
+              <select id="raceVenue" name="raceVenue" required>
+                <option value="">選択してください</option>
+                <option value="桐生">桐生</option>
+                <option value="戸田">戸田</option>
+                <option value="江戸川">江戸川</option>
+                <option value="平和島">平和島</option>
+                <option value="多摩川">多摩川</option>
+                <option value="浜名湖">浜名湖</option>
+                <option value="蒲郡">蒲郡</option>
+                <option value="常滑">常滑</option>
+                <option value="津">津</option>
+                <option value="三国">三国</option>
+                <option value="びわこ">びわこ</option>
+                <option value="住之江">住之江</option>
+                <option value="尼崎">尼崎</option>
+                <option value="鳴門">鳴門</option>
+                <option value="丸亀">丸亀</option>
+                <option value="児島">児島</option>
+                <option value="宮島">宮島</option>
+                <option value="徳山">徳山</option>
+                <option value="下関">下関</option>
+                <option value="若松">若松</option>
+                <option value="芦屋">芦屋</option>
+                <option value="福岡">福岡</option>
+                <option value="唐津">唐津</option>
+                <option value="大村">大村</option>
+              </select>
+            </label>
 
-<div class="card" id="result">ここに分析結果が表示されます。</div>
+            <label class="form-field">
+              <span>レース番号</span>
+              <select id="raceNumber" name="raceNumber" required>
+                <option value="">選択してください</option>
+                <option value="1">1R</option>
+                <option value="2">2R</option>
+                <option value="3">3R</option>
+                <option value="4">4R</option>
+                <option value="5">5R</option>
+                <option value="6">6R</option>
+                <option value="7">7R</option>
+                <option value="8">8R</option>
+                <option value="9">9R</option>
+                <option value="10">10R</option>
+                <option value="11">11R</option>
+                <option value="12">12R</option>
+              </select>
+            </label>
 
-<div class="card">
-<h2>⑦ レース結果と成績</h2>
-<div class="grid">
-<div>1着<input id="res1" type="number" min="1" max="6"></div>
-<div>2着<input id="res2" type="number" min="1" max="6"></div>
-<div>3着<input id="res3" type="number" min="1" max="6"></div>
-<div>購入金額<input id="betAmount" type="number" value="1000"></div>
-<div>払戻金額<input id="returnAmount" type="number" value="0"></div>
-</div>
-<button class="alt" onclick="saveResult()">結果を保存</button>
-<div id="hitResult" class="small"></div>
-</div>
+            <label class="form-field">
+              <span>レース種別</span>
+              <select id="raceCategory" name="raceCategory" required>
+                <option value="women" selected>女子レース</option>
+                <option value="mixed">男女混合レース</option>
+              </select>
+            </label>
 
-<div class="card">
-<h2>⑧ 成績ダッシュボード</h2>
-<div id="stats">記録なし</div>
-</div>
+            <label class="form-field">
+              <span>締切時刻</span>
+              <input id="deadlineTime" name="deadlineTime" type="time">
+            </label>
 
-<div class="card">
-<h2>⑨ AIランク別成績</h2>
-<div id="rankStats">記録なし</div>
-</div>
+            <label class="form-field">
+              <span>進入想定</span>
+              <select id="entryPattern" name="entryPattern">
+                <option value="枠なり" selected>枠なり</option>
+                <option value="進入変化あり">進入変化あり</option>
+                <option value="不明">不明</option>
+              </select>
+            </label>
+          </div>
 
-<div class="card">
-<h2>⑩ 判定別成績</h2>
-<div id="judgeStats">記録なし</div>
-</div>
+          <div class="future-data-area">
+            <div>
+              <strong>データ取得方式</strong>
+              <p id="dataSourceDescription">
+                現在は手入力です。将来、公式データ・オッズ自動取得へ接続できます。
+              </p>
+            </div>
+            <button id="importDataButton" class="secondary-button" type="button" disabled>
+              自動取得（準備中）
+            </button>
+          </div>
+        </section>
 
-<div class="card">
-<h2>⑪ 競艇場別成績</h2>
-<div id="placeStats">記録なし</div>
-</div>
+        <section class="panel racer-input-panel" aria-labelledby="racerInputTitle">
+          <div class="panel-heading racer-heading">
+            <div>
+              <h3 id="racerInputTitle">選手・モーターデータ入力</h3>
+              <p>数値は公開された最新情報を確認して入力してください。</p>
+            </div>
+            <button id="copyPreviousRaceButton" class="secondary-button" type="button">
+              前回入力を呼び出す
+            </button>
+          </div>
 
-<div class="card">
-<h2>⑫ 女子戦・一般戦別成績</h2>
-<div id="typeStats">記録なし</div>
-</div>
+          <div class="table-scroll" tabindex="0">
+            <table class="racer-table">
+              <thead>
+                <tr>
+                  <th scope="col">艇</th>
+                  <th scope="col">選手名</th>
+                  <th scope="col">級別</th>
+                  <th scope="col">全国勝率</th>
+                  <th scope="col">当地勝率</th>
+                  <th scope="col">コース別<br>2連対率</th>
+                  <th scope="col">モーター<br>2連対率</th>
+                  <th scope="col">ボート<br>2連対率</th>
+                  <th scope="col">平均ST</th>
+                  <th scope="col">展示タイム</th>
+                  <th scope="col">展示順位</th>
+                  <th scope="col">体重</th>
+                  <th scope="col">調整重量</th>
+                  <th scope="col">進入</th>
+                </tr>
+              </thead>
 
-<div class="card">
-<h2>⑬ 履歴管理</h2>
-<button class="gray" onclick="exportHistory()">履歴をCSVで保存</button>
-<button class="orange" onclick="clearHistory()">履歴を全消去</button>
-</div>
+              <tbody id="racerTableBody">
+                <tr class="racer-row" data-lane="1">
+                  <th scope="row" class="lane-cell lane-1">1</th>
+                  <td><input id="racerName1" data-field="racerName" type="text" autocomplete="off" aria-label="1号艇 選手名"></td>
+                  <td>
+                    <select id="racerClass1" data-field="racerClass" aria-label="1号艇 級別">
+                      <option value="">選択</option><option value="A1">A1</option><option value="A2">A2</option><option value="B1">B1</option><option value="B2">B2</option>
+                    </select>
+                  </td>
+                  <td><input id="nationalWinRate1" data-field="nationalWinRate" type="number" min="0" max="10" step="0.01" inputmode="decimal" aria-label="1号艇 全国勝率"></td>
+                  <td><input id="localWinRate1" data-field="localWinRate" type="number" min="0" max="10" step="0.01" inputmode="decimal" aria-label="1号艇 当地勝率"></td>
+                  <td><input id="coursePlaceRate1" data-field="coursePlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="1号艇 コース別2連対率"></td>
+                  <td><input id="motorPlaceRate1" data-field="motorPlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="1号艇 モーター2連対率"></td>
+                  <td><input id="boatPlaceRate1" data-field="boatPlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="1号艇 ボート2連対率"></td>
+                  <td><input id="averageStart1" data-field="averageStart" type="number" min="0" max="1" step="0.01" inputmode="decimal" aria-label="1号艇 平均スタートタイミング"></td>
+                  <td><input id="exhibitionTime1" data-field="exhibitionTime" type="number" min="0" max="20" step="0.01" inputmode="decimal" aria-label="1号艇 展示タイム"></td>
+                  <td><input id="exhibitionRank1" data-field="exhibitionRank" type="number" min="1" max="6" step="1" inputmode="numeric" aria-label="1号艇 展示順位"></td>
+                  <td><input id="weight1" data-field="weight" type="number" min="35" max="80" step="0.1" inputmode="decimal" aria-label="1号艇 体重"></td>
+                  <td><input id="adjustWeight1" data-field="adjustWeight" type="number" min="0" max="20" step="0.5" inputmode="decimal" aria-label="1号艇 調整重量"></td>
+                  <td><input id="entryCourse1" data-field="entryCourse" type="number" min="1" max="6" step="1" value="1" inputmode="numeric" aria-label="1号艇 進入コース"></td>
+                </tr>
 
+                <tr class="racer-row" data-lane="2">
+                  <th scope="row" class="lane-cell lane-2">2</th>
+                  <td><input id="racerName2" data-field="racerName" type="text" autocomplete="off" aria-label="2号艇 選手名"></td>
+                  <td>
+                    <select id="racerClass2" data-field="racerClass" aria-label="2号艇 級別">
+                      <option value="">選択</option><option value="A1">A1</option><option value="A2">A2</option><option value="B1">B1</option><option value="B2">B2</option>
+                    </select>
+                  </td>
+                  <td><input id="nationalWinRate2" data-field="nationalWinRate" type="number" min="0" max="10" step="0.01" inputmode="decimal" aria-label="2号艇 全国勝率"></td>
+                  <td><input id="localWinRate2" data-field="localWinRate" type="number" min="0" max="10" step="0.01" inputmode="decimal" aria-label="2号艇 当地勝率"></td>
+                  <td><input id="coursePlaceRate2" data-field="coursePlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="2号艇 コース別2連対率"></td>
+                  <td><input id="motorPlaceRate2" data-field="motorPlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="2号艇 モーター2連対率"></td>
+                  <td><input id="boatPlaceRate2" data-field="boatPlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="2号艇 ボート2連対率"></td>
+                  <td><input id="averageStart2" data-field="averageStart" type="number" min="0" max="1" step="0.01" inputmode="decimal" aria-label="2号艇 平均スタートタイミング"></td>
+                  <td><input id="exhibitionTime2" data-field="exhibitionTime" type="number" min="0" max="20" step="0.01" inputmode="decimal" aria-label="2号艇 展示タイム"></td>
+                  <td><input id="exhibitionRank2" data-field="exhibitionRank" type="number" min="1" max="6" step="1" inputmode="numeric" aria-label="2号艇 展示順位"></td>
+                  <td><input id="weight2" data-field="weight" type="number" min="35" max="80" step="0.1" inputmode="decimal" aria-label="2号艇 体重"></td>
+                  <td><input id="adjustWeight2" data-field="adjustWeight" type="number" min="0" max="20" step="0.5" inputmode="decimal" aria-label="2号艇 調整重量"></td>
+                  <td><input id="entryCourse2" data-field="entryCourse" type="number" min="1" max="6" step="1" value="2" inputmode="numeric" aria-label="2号艇 進入コース"></td>
+                </tr>
 
-<script>
-for(let i=1;i<=6;i++){
- rows.insertAdjacentHTML("beforeend",`<tr><td>${i}</td><td><input id="name${i}" placeholder="手入力"></td><td><input id="win${i}" type="number" step="0.01"></td><td><input id="local${i}" type="number" step="0.01"></td><td><input id="motor${i}" type="number" step="0.1"></td><td><input id="boat${i}" type="number" step="0.1"></td><td><input id="st${i}" type="number" step="0.01"></td><td><input id="course${i}" type="number" value="${i}"></td><td id="check${i}">未確認</td><td id="score${i}">-</td></tr>`);
-}
-const n=id=>Number(document.getElementById(id).value);
-const t=id=>document.getElementById(id).value||"";
-const s=(id,v)=>document.getElementById(id).value=v;
+                <tr class="racer-row" data-lane="3">
+                  <th scope="row" class="lane-cell lane-3">3</th>
+                  <td><input id="racerName3" data-field="racerName" type="text" autocomplete="off" aria-label="3号艇 選手名"></td>
+                  <td>
+                    <select id="racerClass3" data-field="racerClass" aria-label="3号艇 級別">
+                      <option value="">選択</option><option value="A1">A1</option><option value="A2">A2</option><option value="B1">B1</option><option value="B2">B2</option>
+                    </select>
+                  </td>
+                  <td><input id="nationalWinRate3" data-field="nationalWinRate" type="number" min="0" max="10" step="0.01" inputmode="decimal" aria-label="3号艇 全国勝率"></td>
+                  <td><input id="localWinRate3" data-field="localWinRate" type="number" min="0" max="10" step="0.01" inputmode="decimal" aria-label="3号艇 当地勝率"></td>
+                  <td><input id="coursePlaceRate3" data-field="coursePlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="3号艇 コース別2連対率"></td>
+                  <td><input id="motorPlaceRate3" data-field="motorPlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="3号艇 モーター2連対率"></td>
+                  <td><input id="boatPlaceRate3" data-field="boatPlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="3号艇 ボート2連対率"></td>
+                  <td><input id="averageStart3" data-field="averageStart" type="number" min="0" max="1" step="0.01" inputmode="decimal" aria-label="3号艇 平均スタートタイミング"></td>
+                  <td><input id="exhibitionTime3" data-field="exhibitionTime" type="number" min="0" max="20" step="0.01" inputmode="decimal" aria-label="3号艇 展示タイム"></td>
+                  <td><input id="exhibitionRank3" data-field="exhibitionRank" type="number" min="1" max="6" step="1" inputmode="numeric" aria-label="3号艇 展示順位"></td>
+                  <td><input id="weight3" data-field="weight" type="number" min="35" max="80" step="0.1" inputmode="decimal" aria-label="3号艇 体重"></td>
+                  <td><input id="adjustWeight3" data-field="adjustWeight" type="number" min="0" max="20" step="0.5" inputmode="decimal" aria-label="3号艇 調整重量"></td>
+                  <td><input id="entryCourse3" data-field="entryCourse" type="number" min="1" max="6" step="1" value="3" inputmode="numeric" aria-label="3号艇 進入コース"></td>
+                </tr>
 
-let sourceImage=null;
-let crop={x:0,y:0,w:0,h:0};
-let lastPrediction=null;
+                <tr class="racer-row" data-lane="4">
+                  <th scope="row" class="lane-cell lane-4">4</th>
+                  <td><input id="racerName4" data-field="racerName" type="text" autocomplete="off" aria-label="4号艇 選手名"></td>
+                  <td>
+                    <select id="racerClass4" data-field="racerClass" aria-label="4号艇 級別">
+                      <option value="">選択</option><option value="A1">A1</option><option value="A2">A2</option><option value="B1">B1</option><option value="B2">B2</option>
+                    </select>
+                  </td>
+                  <td><input id="nationalWinRate4" data-field="nationalWinRate" type="number" min="0" max="10" step="0.01" inputmode="decimal" aria-label="4号艇 全国勝率"></td>
+                  <td><input id="localWinRate4" data-field="localWinRate" type="number" min="0" max="10" step="0.01" inputmode="decimal" aria-label="4号艇 当地勝率"></td>
+                  <td><input id="coursePlaceRate4" data-field="coursePlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="4号艇 コース別2連対率"></td>
+                  <td><input id="motorPlaceRate4" data-field="motorPlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="4号艇 モーター2連対率"></td>
+                  <td><input id="boatPlaceRate4" data-field="boatPlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="4号艇 ボート2連対率"></td>
+                  <td><input id="averageStart4" data-field="averageStart" type="number" min="0" max="1" step="0.01" inputmode="decimal" aria-label="4号艇 平均スタートタイミング"></td>
+                  <td><input id="exhibitionTime4" data-field="exhibitionTime" type="number" min="0" max="20" step="0.01" inputmode="decimal" aria-label="4号艇 展示タイム"></td>
+                  <td><input id="exhibitionRank4" data-field="exhibitionRank" type="number" min="1" max="6" step="1" inputmode="numeric" aria-label="4号艇 展示順位"></td>
+                  <td><input id="weight4" data-field="weight" type="number" min="35" max="80" step="0.1" inputmode="decimal" aria-label="4号艇 体重"></td>
+                  <td><input id="adjustWeight4" data-field="adjustWeight" type="number" min="0" max="20" step="0.5" inputmode="decimal" aria-label="4号艇 調整重量"></td>
+                  <td><input id="entryCourse4" data-field="entryCourse" type="number" min="1" max="6" step="1" value="4" inputmode="numeric" aria-label="4号艇 進入コース"></td>
+                </tr>
 
-function loadImage(){
- const f=imageFile.files[0];
- if(!f)return alert("画像を選択してください");
- const r=new FileReader();
- r.onload=e=>{
-   const img=new Image();
-   img.onload=()=>{
-     sourceImage=img;
-     crop={x:0,y:0,w:img.width,h:img.height};
-     drawCrop();
-     status.textContent="画像読込完了";
-   };
-   img.src=e.target.result;
- };
- r.readAsDataURL(f);
-}
+                <tr class="racer-row" data-lane="5">
+                  <th scope="row" class="lane-cell lane-5">5</th>
+                  <td><input id="racerName5" data-field="racerName" type="text" autocomplete="off" aria-label="5号艇 選手名"></td>
+                  <td>
+                    <select id="racerClass5" data-field="racerClass" aria-label="5号艇 級別">
+                      <option value="">選択</option><option value="A1">A1</option><option value="A2">A2</option><option value="B1">B1</option><option value="B2">B2</option>
+                    </select>
+                  </td>
+                  <td><input id="nationalWinRate5" data-field="nationalWinRate" type="number" min="0" max="10" step="0.01" inputmode="decimal" aria-label="5号艇 全国勝率"></td>
+                  <td><input id="localWinRate5" data-field="localWinRate" type="number" min="0" max="10" step="0.01" inputmode="decimal" aria-label="5号艇 当地勝率"></td>
+                  <td><input id="coursePlaceRate5" data-field="coursePlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="5号艇 コース別2連対率"></td>
+                  <td><input id="motorPlaceRate5" data-field="motorPlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="5号艇 モーター2連対率"></td>
+                  <td><input id="boatPlaceRate5" data-field="boatPlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="5号艇 ボート2連対率"></td>
+                  <td><input id="averageStart5" data-field="averageStart" type="number" min="0" max="1" step="0.01" inputmode="decimal" aria-label="5号艇 平均スタートタイミング"></td>
+                  <td><input id="exhibitionTime5" data-field="exhibitionTime" type="number" min="0" max="20" step="0.01" inputmode="decimal" aria-label="5号艇 展示タイム"></td>
+                  <td><input id="exhibitionRank5" data-field="exhibitionRank" type="number" min="1" max="6" step="1" inputmode="numeric" aria-label="5号艇 展示順位"></td>
+                  <td><input id="weight5" data-field="weight" type="number" min="35" max="80" step="0.1" inputmode="decimal" aria-label="5号艇 体重"></td>
+                  <td><input id="adjustWeight5" data-field="adjustWeight" type="number" min="0" max="20" step="0.5" inputmode="decimal" aria-label="5号艇 調整重量"></td>
+                  <td><input id="entryCourse5" data-field="entryCourse" type="number" min="1" max="6" step="1" value="5" inputmode="numeric" aria-label="5号艇 進入コース"></td>
+                </tr>
 
-function drawCrop(){
- if(!sourceImage)return;
- previewCanvas.width=crop.w;
- previewCanvas.height=crop.h;
- previewCanvas.getContext("2d").drawImage(sourceImage,crop.x,crop.y,crop.w,crop.h,0,0,crop.w,crop.h);
-}
+                <tr class="racer-row" data-lane="6">
+                  <th scope="row" class="lane-cell lane-6">6</th>
+                  <td><input id="racerName6" data-field="racerName" type="text" autocomplete="off" aria-label="6号艇 選手名"></td>
+                  <td>
+                    <select id="racerClass6" data-field="racerClass" aria-label="6号艇 級別">
+                      <option value="">選択</option><option value="A1">A1</option><option value="A2">A2</option><option value="B1">B1</option><option value="B2">B2</option>
+                    </select>
+                  </td>
+                  <td><input id="nationalWinRate6" data-field="nationalWinRate" type="number" min="0" max="10" step="0.01" inputmode="decimal" aria-label="6号艇 全国勝率"></td>
+                  <td><input id="localWinRate6" data-field="localWinRate" type="number" min="0" max="10" step="0.01" inputmode="decimal" aria-label="6号艇 当地勝率"></td>
+                  <td><input id="coursePlaceRate6" data-field="coursePlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="6号艇 コース別2連対率"></td>
+                  <td><input id="motorPlaceRate6" data-field="motorPlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="6号艇 モーター2連対率"></td>
+                  <td><input id="boatPlaceRate6" data-field="boatPlaceRate" type="number" min="0" max="100" step="0.1" inputmode="decimal" aria-label="6号艇 ボート2連対率"></td>
+                  <td><input id="averageStart6" data-field="averageStart" type="number" min="0" max="1" step="0.01" inputmode="decimal" aria-label="6号艇 平均スタートタイミング"></td>
+                  <td><input id="exhibitionTime6" data-field="exhibitionTime" type="number" min="0" max="20" step="0.01" inputmode="decimal" aria-label="6号艇 展示タイム"></td>
+                  <td><input id="exhibitionRank6" data-field="exhibitionRank" type="number" min="1" max="6" step="1" inputmode="numeric" aria-label="6号艇 展示順位"></td>
+                  <td><input id="weight6" data-field="weight" type="number" min="35" max="80" step="0.1" inputmode="decimal" aria-label="6号艇 体重"></td>
+                  <td><input id="adjustWeight6" data-field="adjustWeight" type="number" min="0" max="20" step="0.5" inputmode="decimal" aria-label="6号艇 調整重量"></td>
+                  <td><input id="entryCourse6" data-field="entryCourse" type="number" min="1" max="6" step="1" value="6" inputmode="numeric" aria-label="6号艇 進入コース"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-function cropRace(){
- if(!sourceImage)return alert("先に画像を読み込んでください");
- const r=Number(racePreset.value);
- // この形式は上部ヘッダー約8%、下部約9%、中央に6レース
- const usableTop=Math.round(sourceImage.height*0.075);
- const usableHeight=Math.round(sourceImage.height*0.79);
- const baseH=Math.round(usableHeight/6);
- const y=Math.max(0,usableTop+(r-1)*baseH+Number(topAdjust.value));
- const h=Math.max(120,baseH+Number(heightAdjust.value));
- crop={x:0,y:y,w:sourceImage.width,h:Math.min(h,sourceImage.height-y)};
- drawCrop();
- race.value=r+"R";
-}
+        <section class="panel condition-panel" aria-labelledby="conditionTitle">
+          <div class="panel-heading">
+            <h3 id="conditionTitle">直前情報・水面状況</h3>
+          </div>
 
-function showFull(){
- if(!sourceImage)return;
- crop={x:0,y:0,w:sourceImage.width,h:sourceImage.height};
- drawCrop();
-}
+          <div class="form-grid condition-grid">
+            <label class="form-field">
+              <span>天候</span>
+              <select id="weather" name="weather">
+                <option value="">選択してください</option>
+                <option value="晴">晴</option>
+                <option value="曇">曇</option>
+                <option value="雨">雨</option>
+                <option value="雪">雪</option>
+                <option value="霧">霧</option>
+              </select>
+            </label>
 
-function prepareOCR(){
- if(!sourceImage)return alert("画像を読み込んでください");
- const scale=2;
- ocrCanvas.width=crop.w*scale;
- ocrCanvas.height=crop.h*scale;
- const ctx=ocrCanvas.getContext("2d");
- ctx.drawImage(sourceImage,crop.x,crop.y,crop.w,crop.h,0,0,ocrCanvas.width,ocrCanvas.height);
- const data=ctx.getImageData(0,0,ocrCanvas.width,ocrCanvas.height);
- const d=data.data;
- for(let i=0;i<d.length;i+=4){
-   let y=.299*d[i]+.587*d[i+1]+.114*d[i+2];
-   y=y>=185?255:0;
-   d[i]=d[i+1]=d[i+2]=y;
- }
- ctx.putImageData(data,0,0);
- status.textContent="OCR用補正完了";
-}
+            <label class="form-field">
+              <span>風向</span>
+              <select id="windDirection" name="windDirection">
+                <option value="">選択してください</option>
+                <option value="無風">無風</option>
+                <option value="追い風">追い風</option>
+                <option value="向かい風">向かい風</option>
+                <option value="左横風">左横風</option>
+                <option value="右横風">右横風</option>
+              </select>
+            </label>
 
-async function runOCR(){
- if(ocrCanvas.width<2)return alert("先に白黒・2倍補正をしてください");
- try{
-   status.textContent="OCR準備中";
-   const worker=await Tesseract.createWorker("jpn+eng",1,{
-     logger:m=>{
-       if(m.status)status.textContent=m.status;
-       if(typeof m.progress==="number")bar.style.width=Math.round(m.progress*100)+"%";
-     }
-   });
-   const ret=await worker.recognize(ocrCanvas);
-   ocrText.value=ret.data.text||"";
-   await worker.terminate();
-   status.textContent="OCR完了";
-   bar.style.width="100%";
- }catch(e){
-   status.textContent="OCR失敗";
-   alert("OCRに失敗しました。インターネット接続を確認してください。");
- }
-}
+            <label class="form-field">
+              <span>風速（m）</span>
+              <input id="windSpeed" name="windSpeed" type="number" min="0" max="30" step="0.1" inputmode="decimal">
+            </label>
 
-function extractNumbers(){
- const lines=ocrText.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
- let boatNo=1;
- for(const line of lines){
-   if(boatNo>6)break;
-   const nums=(line.match(/\d+\.\d+|\d+/g)||[]).map(Number);
-   if(nums.length<3)continue;
-   const rates=nums.filter(x=>x>=1&&x<=10);
-   const percents=nums.filter(x=>x>=10&&x<=100);
-   const sts=nums.filter(x=>x>0&&x<0.5);
-   if(rates[0]!=null)s("win"+boatNo,rates[0]);
-   if(rates[1]!=null)s("local"+boatNo,rates[1]);
-   if(percents[0]!=null)s("motor"+boatNo,percents[0]);
-   if(percents[1]!=null)s("boat"+boatNo,percents[1]);
-   if(sts[0]!=null)s("st"+boatNo,sts[0]);
-   boatNo++;
- }
- checkAll(false);
- alert((boatNo-1)+"艇分の数値候補を反映しました");
-}
+            <label class="form-field">
+              <span>波高（cm）</span>
+              <input id="waveHeight" name="waveHeight" type="number" min="0" max="100" step="1" inputmode="numeric">
+            </label>
 
-function checkBoat(i){
- const p=[];
- if(!t("name"+i))p.push("選手名");
- if(!Number.isFinite(n("win"+i))||n("win"+i)<1||n("win"+i)>10)p.push("全国");
- if(!Number.isFinite(n("local"+i))||n("local"+i)<0||n("local"+i)>10)p.push("当地");
- if(!Number.isFinite(n("motor"+i))||n("motor"+i)<0||n("motor"+i)>100)p.push("モーター");
- if(!Number.isFinite(n("boat"+i))||n("boat"+i)<0||n("boat"+i)>100)p.push("ボート");
- if(!Number.isFinite(n("st"+i))||n("st"+i)<0||n("st"+i)>.5)p.push("ST");
- const e=document.getElementById("check"+i);
- if(!p.length){e.textContent="正常";e.className="ok";return true}
- e.textContent="要確認:"+p.join("・");e.className="bad";return false;
-}
-function checkAll(show=true){
- let ok=0;for(let i=1;i<=6;i++)if(checkBoat(i))ok++;
- if(show)alert(`正常:${ok}艇 / 要確認:${6-ok}艇`);
- return ok===6;
-}
-function scoreRate(x){return Math.max(0,Math.min(100,(x-3)/5*100))}
-function pct(x){return Math.max(0,Math.min(100,x*2))}
-function stsc(x){if(x<=.08)return 100;if(x<=.12)return 92;if(x<=.16)return 82;if(x<=.20)return 68;return 48}
-function analyze(){
- if(!checkAll(false))return alert("要確認項目があります。すべて直してから分析してください。");
- const d=[];
- for(let i=1;i<=6;i++){
-   const female=t("raceType")==="女子戦";
-   let sc=Math.round(
-     scoreRate(n("win"+i))*(female?.28:.32)+
-     scoreRate(n("local"+i))*(female?.14:.12)+
-     pct(n("motor"+i))*(female?.26:.24)+
-     pct(n("boat"+i))*.12+
-     stsc(n("st"+i))*(female?.20:.20)
-   );
-   document.getElementById("score"+i).textContent=sc;
-   d.push({b:i,s:sc,name:t("name"+i)});
- }
- d.sort((a,b)=>b.s-a.s);
- const a=d[0],b=d[1],c=d[2],diff=a.s-b.s;
- const r=a.s>=90&&diff>=10?"SSS":a.s>=84&&diff>=6?"S":a.s>=79&&diff>=4?"A":a.s>=71?"B":"C";
- const judge=["SSS","S"].includes(r)?"勝負候補":r==="A"?"買い候補":r==="B"?"慎重":"見送り";
- const cls=["SSS","S","A"].includes(r)?"good":r==="B"?"warn":"stop";
- lastPrediction={
-   rank:r,
-   judge:judge,
-   first:a.b,
-   second:b.b,
-   third:c.b,
-   niren:`${a.b}-${b.b}`,
-   sanren1:`${a.b}-${b.b}-${c.b}`,
-   sanren2:`${a.b}-${c.b}-${b.b}`,
-   confidence:Math.max(40,Math.min(98,Math.round(55+a.s*.25+diff*2))),
-   raceType:t("raceType")
- };
- const advice=[];
- if(diff>=8)advice.push("上位艇と2位以下の指数差が大きく、軸候補が明確です。");
- else advice.push("上位艇の指数差が小さいため、買い目を広げすぎないよう注意してください。");
- if(Number(wind.value)>=5)advice.push("風が強いため、直前の展示気配を優先してください。");
- if(t("raceType")==="女子戦")advice.push("女子戦モードではモーター・当地成績をやや重く評価しています。");
- if(r==="C")advice.push("見送り判定です。無理に購入しない選択を優先してください。");
+            <label class="form-field">
+              <span>気温（℃）</span>
+              <input id="airTemperature" name="airTemperature" type="number" min="-20" max="50" step="0.1" inputmode="decimal">
+            </label>
 
- result.innerHTML=`<div class="rank ${cls}">${r}</div>
- <b>${t("place")||"競艇場未入力"} ${t("race")}・${t("raceType")}</b><br>
- <span class="${cls}">${judge}</span><br>
- AI信頼度：<b>${lastPrediction.confidence}%</b><br><br>
- 1位:${a.b}号艇 ${a.name}（${a.s}）<br>
- 2位:${b.b}号艇 ${b.name}（${b.s}）<br>
- 3位:${c.b}号艇 ${c.name}（${c.s}）
- <div class="reason"><b>AIアドバイス</b><br>・${advice.join("<br>・")}</div>`;
-}
+            <label class="form-field">
+              <span>水温（℃）</span>
+              <input id="waterTemperature" name="waterTemperature" type="number" min="0" max="40" step="0.1" inputmode="decimal">
+            </label>
+          </div>
 
-function getHistory(){
-  return JSON.parse(localStorage.getItem("358v32history")||"[]");
-}
-function saveResult(){
-  if(!lastPrediction){
-    alert("先にAI分析をしてください");
-    return;
-  }
-  const r1=Number(document.getElementById("res1").value);
-  const r2=Number(document.getElementById("res2").value);
-  const r3=Number(document.getElementById("res3").value);
-  if(!r1||!r2||!r3){
-    alert("1着・2着・3着を入力してください");
-    return;
-  }
-  const actualNiren=`${r1}-${r2}`;
-  const actualSanren=`${r1}-${r2}-${r3}`;
-  const nirenHit=actualNiren===lastPrediction.niren;
-  const sanrenHit=[lastPrediction.sanren1,lastPrediction.sanren2].includes(actualSanren);
-  const history=getHistory();
-  history.push({
-    date:new Date().toLocaleString("ja-JP"),
-    place:t("place"),
-    race:t("race"),
-    rank:lastPrediction.rank,
-    judge:lastPrediction.judge || "",
-    confidence:lastPrediction.confidence || 0,
-    raceType:lastPrediction.raceType || t("raceType"),
-    predictedNiren:lastPrediction.niren,
-    predictedSanren1:lastPrediction.sanren1,
-    predictedSanren2:lastPrediction.sanren2,
-    actual:actualSanren,
-    nirenHit,
-    sanrenHit,
-    bet:Number(document.getElementById("betAmount").value)||0,
-    returned:Number(document.getElementById("returnAmount").value)||0
-  });
-  localStorage.setItem("358v32history",JSON.stringify(history));
-  document.getElementById("hitResult").innerHTML=
-    `2連単：${nirenHit?"✅ 的中":"❌ 不的中"}<br>3連単：${sanrenHit?"✅ 的中":"❌ 不的中"}`;
-  updateStats();
-  alert("結果を保存しました");
-}
-function updateStats(){
-  const h=getHistory();
-  const el=document.getElementById("stats");
-  const rankEl=document.getElementById("rankStats");
-  const judgeEl=document.getElementById("judgeStats");
-  const placeEl=document.getElementById("placeStats");
-  const typeEl=document.getElementById("typeStats");
+          <label class="form-field full-width-field">
+            <span>直前メモ</span>
+            <textarea id="raceMemo" name="raceMemo" rows="3" maxlength="500" placeholder="部品交換、転覆歴、展示気配、進入変化など"></textarea>
+          </label>
+        </section>
 
-  if(!h.length){
-    el.textContent="記録なし";
-    rankEl.textContent="記録なし";
-    judgeEl.textContent="記録なし";
-    placeEl.textContent="記録なし";
-    typeEl.textContent="記録なし";
-    return;
-  }
+        <div class="prediction-action-area">
+          <button id="runPredictionButton" class="primary-button prediction-button" type="button">
+            AI予想を実行
+          </button>
+          <p id="validationMessage" class="validation-message" role="alert" aria-live="polite"></p>
+        </div>
 
-  const n2=h.filter(x=>x.nirenHit).length;
-  const s3=h.filter(x=>x.sanrenHit).length;
-  const bet=h.reduce((a,x)=>a+(x.bet||0),0);
-  const ret=h.reduce((a,x)=>a+(x.returned||0),0);
-  const profit=ret-bet;
+        <section id="predictionResultPanel" class="panel result-panel" aria-labelledby="predictionResultTitle" hidden>
+          <div class="panel-heading result-heading">
+            <div>
+              <h3 id="predictionResultTitle">AI予想結果</h3>
+              <p id="predictionGeneratedAt"></p>
+            </div>
+            <button id="savePredictionButton" class="primary-button" type="button">
+              履歴に保存
+            </button>
+          </div>
 
-  el.innerHTML=
-    `記録数：${h.length}<br>`+
-    `2連単的中率：${Math.round(n2/h.length*100)}%<br>`+
-    `3連単的中率：${Math.round(s3/h.length*100)}%<br>`+
-    `回収率：${bet?Math.round(ret/bet*100):0}%<br>`+
-    `収支：${profit>=0?"+":""}${profit}円`;
+          <div class="result-summary-grid">
+            <article class="result-card">
+              <span class="result-label">本命</span>
+              <strong id="topPrediction">-</strong>
+            </article>
+            <article class="result-card">
+              <span class="result-label">信頼度</span>
+              <strong id="confidenceScore">-</strong>
+            </article>
+            <article class="result-card">
+              <span class="result-label">レース判定</span>
+              <strong id="raceJudgement">-</strong>
+            </article>
+            <article class="result-card danger-card">
+              <span class="result-label">危険ゾーン</span>
+              <strong id="dangerZoneStatus">-</strong>
+            </article>
+          </div>
 
-  const ranks=["SSS","SS","S","A","B","C"];
-  const rankRows=[];
-  for(const r of ranks){
-    const items=h.filter(x=>x.rank===r);
-    if(!items.length) continue;
-    const rb=items.reduce((a,x)=>a+(x.bet||0),0);
-    const rr=items.reduce((a,x)=>a+(x.returned||0),0);
-    const rh=items.filter(x=>x.sanrenHit).length;
-    rankRows.push(
-      `<b>${r}</b>：${items.length}件 / 3連単的中率 ${Math.round(rh/items.length*100)}% / 回収率 ${rb?Math.round(rr/rb*100):0}%`
-    );
-  }
-  rankEl.innerHTML=rankRows.length?rankRows.join("<br>"):"記録なし";
+          <div class="result-layout">
+            <section class="result-section" aria-labelledby="aiEvaluationTitle">
+              <h4 id="aiEvaluationTitle">AI総合評価</h4>
+              <div class="table-scroll">
+                <table class="evaluation-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">順位</th>
+                      <th scope="col">艇</th>
+                      <th scope="col">選手</th>
+                      <th scope="col">総合点</th>
+                      <th scope="col">1着確率</th>
+                      <th scope="col">評価</th>
+                    </tr>
+                  </thead>
+                  <tbody id="evaluationTableBody"></tbody>
+                </table>
+              </div>
+            </section>
 
-  const groups=[
-    ["勝負候補",["SSS","SS","S"]],
-    ["買い候補",["A"]],
-    ["慎重",["B"]],
-    ["見送り",["C"]]
-  ];
-  const judgeRows=[];
-  for(const [label,ranksInGroup] of groups){
-    const items=h.filter(x=>ranksInGroup.includes(x.rank));
-    if(!items.length) continue;
-    const gb=items.reduce((a,x)=>a+(x.bet||0),0);
-    const gr=items.reduce((a,x)=>a+(x.returned||0),0);
-    const gh=items.filter(x=>x.sanrenHit).length;
-    judgeRows.push(
-      `<b>${label}</b>：${items.length}件 / 3連単的中率 ${Math.round(gh/items.length*100)}% / 回収率 ${gb?Math.round(gr/gb*100):0}%`
-    );
-  }
-  judgeEl.innerHTML=judgeRows.length?judgeRows.join("<br>"):"記録なし";
+            <section class="result-section" aria-labelledby="bettingTitle">
+              <div class="section-title-row">
+                <h4 id="bettingTitle">推奨買い目</h4>
+                <label class="compact-field">
+                  <span>表示点数</span>
+                  <select id="betCount">
+                    <option value="3">3点</option>
+                    <option value="5" selected>5点</option>
+                    <option value="8">8点</option>
+                    <option value="10">10点</option>
+                  </select>
+                </label>
+              </div>
+              <div id="bettingRecommendations" class="betting-list"></div>
+            </section>
+          </div>
 
-  const places=[...new Set(h.map(x=>x.place||"未入力"))];
-  placeEl.innerHTML=places.map(p=>{
-    const items=h.filter(x=>(x.place||"未入力")===p);
-    const pb=items.reduce((a,x)=>a+(x.bet||0),0);
-    const pr=items.reduce((a,x)=>a+(x.returned||0),0);
-    const ph=items.filter(x=>x.sanrenHit).length;
-    return `<b>${p}</b>：${items.length}件 / 3連単的中率 ${Math.round(ph/items.length*100)}% / 回収率 ${pb?Math.round(pr/pb*100):0}%`;
-  }).join("<br>");
+          <section class="result-section" aria-labelledby="dangerDetailsTitle">
+            <h4 id="dangerDetailsTitle">危険要因</h4>
+            <ul id="dangerReasonList" class="danger-reason-list"></ul>
+          </section>
 
-  const types=["女子戦","一般戦"];
-  const typeRows=[];
-  for(const type of types){
-    const items=h.filter(x=>(x.raceType||"女子戦")===type);
-    if(!items.length)continue;
-    const tb=items.reduce((a,x)=>a+(x.bet||0),0);
-    const tr=items.reduce((a,x)=>a+(x.returned||0),0);
-    const th=items.filter(x=>x.sanrenHit).length;
-    typeRows.push(`<b>${type}</b>：${items.length}件 / 3連単的中率 ${Math.round(th/items.length*100)}% / 回収率 ${tb?Math.round(tr/tb*100):0}%`);
-  }
-  typeEl.innerHTML=typeRows.length?typeRows.join("<br>"):"記録なし";
-}
-function clearHistory(){
-  if(confirm("成績履歴をすべて消去しますか？")){
-    localStorage.removeItem("358v32history");
-    updateStats();
-  }
-}
-function exportHistory(){
-  const h=getHistory();
-  if(!h.length){
-    alert("保存する履歴がありません");
-    return;
-  }
-  const head=["日時","競艇場","レース","種別","ランク","判定","信頼度","予想2連単","予想3連単1","予想3連単2","実際","2連単的中","3連単的中","購入","払戻"];
-  const lines=[head.join(",")];
-  for(const x of h){
-    lines.push([
-      x.date,x.place,x.race,x.raceType||"",x.rank,x.judge||"",x.confidence||0,x.predictedNiren,x.predictedSanren1,x.predictedSanren2,x.actual,
-      x.nirenHit?"的中":"不的中",x.sanrenHit?"的中":"不的中",x.bet,x.returned
-    ].map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(","));
-  }
-  const blob=new Blob(["\uFEFF"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download="358BoardAI_history.csv";
-  a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-}
-updateStats();
+          <section class="result-section" aria-labelledby="predictionCommentTitle">
+            <h4 id="predictionCommentTitle">AI分析コメント</h4>
+            <p id="predictionComment" class="prediction-comment"></p>
+          </section>
+        </section>
+      </section>
 
-</script>
+      <!-- 履歴画面 -->
+      <section id="historyScreen" class="screen" aria-labelledby="historyTitle" hidden>
+        <div class="screen-heading">
+          <div>
+            <h2 id="historyTitle">予想履歴</h2>
+            <p>端末内に保存した予想と結果を管理します。</p>
+          </div>
+          <button id="clearHistoryButton" class="danger-button" type="button">
+            履歴を全削除
+          </button>
+        </div>
+
+        <section class="panel history-summary-panel">
+          <div class="history-stat-grid">
+            <article class="stat-card">
+              <span>保存件数</span>
+              <strong id="historyTotalCount">0</strong>
+            </article>
+            <article class="stat-card">
+              <span>結果入力済み</span>
+              <strong id="historySettledCount">0</strong>
+            </article>
+            <article class="stat-card">
+              <span>的中件数</span>
+              <strong id="historyHitCount">0</strong>
+            </article>
+            <article class="stat-card">
+              <span>的中率</span>
+              <strong id="historyHitRate">0.0%</strong>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="historyListTitle">
+          <div class="panel-heading">
+            <h3 id="historyListTitle">履歴一覧</h3>
+            <div class="history-controls">
+              <label class="compact-field">
+                <span>開催場</span>
+                <select id="historyVenueFilter">
+                  <option value="">すべて</option>
+                </select>
+              </label>
+              <label class="compact-field">
+                <span>結果</span>
+                <select id="historyResultFilter">
+                  <option value="">すべて</option>
+                  <option value="pending">未入力</option>
+                  <option value="hit">的中</option>
+                  <option value="miss">不的中</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div id="historyEmptyState" class="empty-state">
+            保存された予想はありません。
+          </div>
+
+          <div class="table-scroll">
+            <table id="historyTable" class="history-table" hidden>
+              <thead>
+                <tr>
+                  <th scope="col">開催日</th>
+                  <th scope="col">開催場</th>
+                  <th scope="col">R</th>
+                  <th scope="col">本命</th>
+                  <th scope="col">信頼度</th>
+                  <th scope="col">実際の結果</th>
+                  <th scope="col">判定</th>
+                  <th scope="col">操作</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <!-- 分析画面 -->
+      <section id="analysisScreen" class="screen" aria-labelledby="analysisTitle" hidden>
+        <div class="screen-heading">
+          <div>
+            <h2 id="analysisTitle">成績分析</h2>
+            <p>保存履歴を基に、予想精度と傾向を分析します。</p>
+          </div>
+          <button id="refreshAnalysisButton" class="secondary-button" type="button">
+            分析を更新
+          </button>
+        </div>
+
+        <section class="panel">
+          <div class="analysis-stat-grid">
+            <article class="stat-card">
+              <span>全体的中率</span>
+              <strong id="analysisOverallHitRate">0.0%</strong>
+            </article>
+            <article class="stat-card">
+              <span>女子戦的中率</span>
+              <strong id="analysisWomenHitRate">0.0%</strong>
+            </article>
+            <article class="stat-card">
+              <span>危険ゾーン回避率</span>
+              <strong id="analysisDangerAvoidanceRate">0.0%</strong>
+            </article>
+            <article class="stat-card">
+              <span>平均信頼度</span>
+              <strong id="analysisAverageConfidence">0.0%</strong>
+            </article>
+          </div>
+        </section>
+
+        <div class="analysis-grid">
+          <section class="panel" aria-labelledby="venueAnalysisTitle">
+            <div class="panel-heading">
+              <h3 id="venueAnalysisTitle">開催場別成績</h3>
+            </div>
+            <div id="venueAnalysisEmpty" class="empty-state">分析できる履歴がありません。</div>
+            <div class="table-scroll">
+              <table id="venueAnalysisTable" class="analysis-table" hidden>
+                <thead>
+                  <tr>
+                    <th scope="col">開催場</th>
+                    <th scope="col">件数</th>
+                    <th scope="col">的中</th>
+                    <th scope="col">的中率</th>
+                  </tr>
+                </thead>
+                <tbody id="venueAnalysisTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="laneAnalysisTitle">
+            <div class="panel-heading">
+              <h3 id="laneAnalysisTitle">1着本命艇別成績</h3>
+            </div>
+            <div id="laneAnalysisEmpty" class="empty-state">分析できる履歴がありません。</div>
+            <div class="table-scroll">
+              <table id="laneAnalysisTable" class="analysis-table" hidden>
+                <thead>
+                  <tr>
+                    <th scope="col">本命艇</th>
+                    <th scope="col">件数</th>
+                    <th scope="col">的中</th>
+                    <th scope="col">的中率</th>
+                  </tr>
+                </thead>
+                <tbody id="laneAnalysisTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel" aria-labelledby="analysisCommentTitle">
+          <div class="panel-heading">
+            <h3 id="analysisCommentTitle">分析結果</h3>
+          </div>
+          <div id="analysisComment" class="analysis-comment">
+            結果を入力した履歴が蓄積されると、改善点を表示します。
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>
+        358BoardAIは予想支援ツールです。舟券購入はご自身の判断と責任で行ってください。
+      </p>
+      <span id="appVersion">Version 1.0.0</span>
+    </footer>
+  </div>
+
+  <!-- 履歴結果入力ダイアログ -->
+  <dialog id="resultInputDialog" class="app-dialog">
+    <form id="resultInputForm" method="dialog">
+      <div class="dialog-heading">
+        <h2>実際の結果を入力</h2>
+        <button id="closeResultDialogButton" class="icon-button" type="button" aria-label="閉じる">
+          ×
+        </button>
+      </div>
+
+      <input id="resultHistoryId" type="hidden">
+
+      <div class="form-grid">
+        <label class="form-field">
+          <span>1着</span>
+          <select id="actualFirst" required>
+            <option value="">選択</option>
+            <option value="1">1号艇</option>
+            <option value="2">2号艇</option>
+            <option value="3">3号艇</option>
+            <option value="4">4号艇</option>
+            <option value="5">5号艇</option>
+            <option value="6">6号艇</option>
+          </select>
+        </label>
+
+        <label class="form-field">
+          <span>2着</span>
+          <select id="actualSecond" required>
+            <option value="">選択</option>
+            <option value="1">1号艇</option>
+            <option value="2">2号艇</option>
+            <option value="3">3号艇</option>
+            <option value="4">4号艇</option>
+            <option value="5">5号艇</option>
+            <option value="6">6号艇</option>
+          </select>
+        </label>
+
+        <label class="form-field">
+          <span>3着</span>
+          <select id="actualThird" required>
+            <option value="">選択</option>
+            <option value="1">1号艇</option>
+            <option value="2">2号艇</option>
+            <option value="3">3号艇</option>
+            <option value="4">4号艇</option>
+            <option value="5">5号艇</option>
+            <option value="6">6号艇</option>
+          </select>
+        </label>
+
+        <label class="form-field">
+          <span>3連単払戻金（円）</span>
+          <input id="payoutAmount" type="number" min="0" step="10" inputmode="numeric">
+        </label>
+      </div>
+
+      <p id="resultInputMessage" class="validation-message" role="alert"></p>
+
+      <div class="dialog-actions">
+        <button id="cancelResultButton" class="secondary-button" type="button">キャンセル</button>
+        <button id="saveResultButton" class="primary-button" type="submit">結果を保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 設定ダイアログ -->
+  <dialog id="settingsDialog" class="app-dialog">
+    <form id="settingsForm" method="dialog">
+      <div class="dialog-heading">
+        <h2>予想設定</h2>
+        <button id="closeSettingsButton" class="icon-button" type="button" aria-label="閉じる">
+          ×
+        </button>
+      </div>
+
+      <div class="form-grid">
+        <label class="form-field">
+          <span>予想方針</span>
+          <select id="predictionPolicy">
+            <option value="hit-rate" selected>的中率重視</option>
+            <option value="balanced">バランス重視</option>
+          </select>
+        </label>
+
+        <label class="form-field">
+          <span>危険ゾーン判定</span>
+          <select id="dangerSensitivity">
+            <option value="high" selected>厳しめ</option>
+            <option value="standard">標準</option>
+            <option value="low">緩め</option>
+          </select>
+        </label>
+
+        <label class="form-field">
+          <span>最低信頼度</span>
+          <input id="minimumConfidence" type="number" min="0" max="100" step="1" value="60" inputmode="numeric">
+        </label>
+
+        <label class="form-field">
+          <span>自動保存</span>
+          <select id="autoSaveSetting">
+            <option value="off" selected>使用しない</option>
+            <option value="on">使用する</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="dialog-actions">
+        <button id="cancelSettingsButton" class="secondary-button" type="button">キャンセル</button>
+        <button id="saveSettingsButton" class="primary-button" type="submit">設定を保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 通知 -->
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <!--
+    読み込み順は固定です。
+    prediction.js: 予想計算
+    history.js: 履歴保存・読込
+    analysis.js: 成績分析
+    app.js: 画面全体の制御
+  -->
+  <script src="prediction.js" defer></script>
+  <script src="history.js" defer></script>
+  <script src="analysis.js" defer></script>
+  <script src="app.js" defer></script>
 </body>
 </html>
