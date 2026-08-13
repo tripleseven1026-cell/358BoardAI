@@ -132,45 +132,94 @@
   }
 
   function parseOfficialBeforeInfoHtml(html) {
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    const rows = [...doc.querySelectorAll("tr")];
-    const racers = [];
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const rows = [...doc.querySelectorAll("tr")];
+  const racers = [];
 
-    for (const row of rows) {
-      const cells = [...row.querySelectorAll("th,td")]
-        .map((cell) => normalizeSpaces(cell.textContent))
-        .filter(Boolean);
+  for (const row of rows) {
+    const cellElements = [...row.querySelectorAll("th, td")];
 
-      const text = normalizeSpaces(row.textContent);
-      const laneMatch = text.match(/^([1-6１-６])\s/);
-      if (!laneMatch) continue;
-
-      const lane = Number(
-        laneMatch[1]
-          .replace("１","1").replace("２","2").replace("３","3")
-          .replace("４","4").replace("５","5").replace("６","6")
-      );
-
-      if (racers.some((racer) => racer.lane === lane)) continue;
-
-      const weightCell = cells.find((cell) => /^\d{2}(?:\.\d)?kg$/.test(cell));
-      const weight = weightCell ? parseNumber(weightCell) : null;
-
-      const exhibitionCell = cells.find((cell) => /^6\.\d{2}$/.test(cell));
-      const exhibitionTime = exhibitionCell ? Number(exhibitionCell) : null;
-
-      racers.push({ lane, weight, exhibitionTime });
+    if (!cellElements.length) {
+      continue;
     }
 
-    const validTimes = racers
-      .filter((racer) => Number.isFinite(racer.exhibitionTime))
-      .sort((a, b) => a.exhibitionTime - b.exhibitionTime);
+    const cells = cellElements.map((cell) =>
+      normalizeSpaces(cell.textContent)
+    );
 
-    validTimes.forEach((racer, index) => {
-      racer.exhibitionRank = index + 1;
+    const laneCell = cells.find((cell) =>
+      /^[1-6１-６]$/.test(cell)
+    );
+
+    if (!laneCell) {
+      continue;
+    }
+
+    const lane = Number(
+      laneCell
+        .replace("１", "1")
+        .replace("２", "2")
+        .replace("３", "3")
+        .replace("４", "4")
+        .replace("５", "5")
+        .replace("６", "6")
+    );
+
+    if (
+      !Number.isInteger(lane) ||
+      lane < 1 ||
+      lane > 6 ||
+      racers.some((racer) => racer.lane === lane)
+    ) {
+      continue;
+    }
+
+    const weightCell = cells.find((cell) =>
+      /^\d{2}(?:\.\d)?kg$/.test(cell)
+    );
+
+    const exhibitionCell = cells.find((cell) =>
+      /^6\.\d{2}$/.test(cell)
+    );
+
+    const weight = weightCell
+      ? parseNumber(weightCell)
+      : null;
+
+    const exhibitionTime = exhibitionCell
+      ? Number(exhibitionCell)
+      : null;
+
+    if (
+      !Number.isFinite(weight) &&
+      !Number.isFinite(exhibitionTime)
+    ) {
+      continue;
+    }
+
+    racers.push({
+      lane,
+      weight,
+      exhibitionTime
     });
+  }
 
-    return racers.sort((a, b) => a.lane - b.lane);
+  const validTimes = racers
+    .filter((racer) =>
+      Number.isFinite(racer.exhibitionTime)
+    )
+    .sort(
+      (a, b) =>
+        a.exhibitionTime - b.exhibitionTime
+    );
+
+  validTimes.forEach((racer, index) => {
+    racer.exhibitionRank = index + 1;
+  });
+
+  return racers.sort(
+    (a, b) => a.lane - b.lane
+  );
   }
 
   async function fetchOfficialHtml(url) {
