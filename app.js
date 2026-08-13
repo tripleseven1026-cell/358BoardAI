@@ -17,7 +17,7 @@
 "use strict";
 
 (function initializeApp(global) {
-  const APP_VERSION = "1.1.0";
+  const APP_VERSION = "1.1.1";
   const SETTINGS_KEY = "358BoardAI.settings.v1";
   const LAST_INPUT_KEY = "358BoardAI.lastInput.v1";
 
@@ -41,7 +41,7 @@
     const hd = compactDate(raceDate);
     const rno = Number(raceNumber);
 
-    if (!jcd || !/^\\d{8}$/.test(hd) || !Number.isInteger(rno) || rno < 1 || rno > 12) {
+    if (!jcd || !/^\d{8}$/.test(hd) || !Number.isInteger(rno) || rno < 1 || rno > 12) {
       throw new Error("開催日・開催場・レース番号を確認してください。");
     }
 
@@ -49,14 +49,14 @@
   }
 
   function parseNumber(text) {
-    const match = String(text || "").replaceAll(",", "").match(/-?\\d+(?:\\.\\d+)?/);
+    const match = String(text || "").replaceAll(",", "").match(/-?\d+(?:\.\d+)?/);
     return match ? Number(match[0]) : null;
   }
 
   function normalizeSpaces(text) {
     return String(text || "")
-      .replace(/\\u3000/g, " ")
-      .replace(/\\s+/g, " ")
+      .replace(/\u3000/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
   }
 
@@ -67,7 +67,7 @@
 
     for (const row of rows) {
       const text = normalizeSpaces(row.textContent);
-      const laneMatch = text.match(/^([1-6１-６])\\s/);
+      const laneMatch = text.match(/^([1-6１-６])\s/);
       if (!laneMatch) continue;
 
       const lane = Number(
@@ -82,30 +82,30 @@
         .map((cell) => normalizeSpaces(cell.textContent))
         .filter(Boolean);
 
-      const racerCell = cells.find((cell) => /\\d{4}\\s*\\/\\s*(A1|A2|B1|B2)/.test(cell));
+      const racerCell = cells.find((cell) => /\d{4}\s*\/\s*(A1|A2|B1|B2)/.test(cell));
       if (!racerCell) continue;
 
-      const classMatch = racerCell.match(/\\d{4}\\s*\\/\\s*(A1|A2|B1|B2)\\s+(.+?)(?:\\s+[^\\s\\/]+\\/[^\\s\\/]+|\\s+\\d+歳)/);
+      const classMatch = racerCell.match(/\d{4}\s*\/\s*(A1|A2|B1|B2)\s+(.+?)(?:\s+[^\s\/]+\/[^\s\/]+|\s+\d+歳)/);
       const racerClass = classMatch ? classMatch[1] : "";
       const racerName = classMatch ? normalizeSpaces(classMatch[2]) : "";
 
-      const weightMatch = racerCell.match(/(\\d{2}(?:\\.\\d)?)kg/);
+      const weightMatch = racerCell.match(/(\d{2}(?:\.\d)?)kg/);
       const weight = weightMatch ? Number(weightMatch[1]) : null;
 
-      const stCell = cells.find((cell) => /F\\d/.test(cell) && /L\\d/.test(cell));
+      const stCell = cells.find((cell) => /F\d/.test(cell) && /L\d/.test(cell));
       let averageStart = null;
       if (stCell) {
-        const nums = stCell.match(/0\\.\\d{2}/g);
+        const nums = stCell.match(/0\.\d{2}/g);
         if (nums?.length) averageStart = Number(nums[nums.length - 1]);
       }
 
       const numericCells = cells.filter((cell) => {
-        const nums = cell.match(/\\d+(?:\\.\\d+)?/g);
-        return nums && nums.length >= 2 && !/歳|kg|F\\d|L\\d/.test(cell);
+        const nums = cell.match(/\d+(?:\.\d+)?/g);
+        return nums && nums.length >= 2 && !/歳|kg|F\d|L\d/.test(cell);
       });
 
       const extractNumbers = (cell) => {
-        const nums = (cell || "").match(/\\d+(?:\\.\\d+)?/g) || [];
+        const nums = (cell || "").match(/\d+(?:\.\d+)?/g) || [];
         return nums.map(Number);
       };
 
@@ -141,7 +141,7 @@
         .filter(Boolean);
 
       const text = normalizeSpaces(row.textContent);
-      const laneMatch = text.match(/^([1-6１-６])\\s/);
+      const laneMatch = text.match(/^([1-6１-６])\s/);
       if (!laneMatch) continue;
 
       const lane = Number(
@@ -152,10 +152,10 @@
 
       if (racers.some((racer) => racer.lane === lane)) continue;
 
-      const weightCell = cells.find((cell) => /^\\d{2}(?:\\.\\d)?kg$/.test(cell));
+      const weightCell = cells.find((cell) => /^\d{2}(?:\.\d)?kg$/.test(cell));
       const weight = weightCell ? parseNumber(weightCell) : null;
 
-      const exhibitionCell = cells.find((cell) => /^6\\.\\d{2}$/.test(cell));
+      const exhibitionCell = cells.find((cell) => /^6\.\d{2}$/.test(cell));
       const exhibitionTime = exhibitionCell ? Number(exhibitionCell) : null;
 
       racers.push({ lane, weight, exhibitionTime });
