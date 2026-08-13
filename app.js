@@ -17,9 +17,268 @@
 "use strict";
 
 (function initializeApp(global) {
-  const APP_VERSION = "1.0.0";
+  const APP_VERSION = "1.1.0";
   const SETTINGS_KEY = "358BoardAI.settings.v1";
   const LAST_INPUT_KEY = "358BoardAI.lastInput.v1";
+
+  const OFFICIAL_BASE_URL = "https://www.boatrace.jp/owpc/pc/race";
+
+  const VENUE_CODES = Object.freeze({
+    "桐生": "01", "戸田": "02", "江戸川": "03", "平和島": "04",
+    "多摩川": "05", "浜名湖": "06", "蒲郡": "07", "常滑": "08",
+    "津": "09", "三国": "10", "びわこ": "11", "住之江": "12",
+    "尼崎": "13", "鳴門": "14", "丸亀": "15", "児島": "16",
+    "宮島": "17", "徳山": "18", "下関": "19", "若松": "20",
+    "芦屋": "21", "福岡": "22", "唐津": "23", "大村": "24"
+  });
+
+  function compactDate(dateString) {
+    return String(dateString || "").replaceAll("-", "");
+  }
+
+  function buildOfficialUrl(kind, raceDate, venue, raceNumber) {
+    const jcd = VENUE_CODES[venue];
+    const hd = compactDate(raceDate);
+    const rno = Number(raceNumber);
+
+    if (!jcd || !/^\\d{8}$/.test(hd) || !Number.isInteger(rno) || rno < 1 || rno > 12) {
+      throw new Error("開催日・開催場・レース番号を確認してください。");
+    }
+
+    return `${OFFICIAL_BASE_URL}/${kind}?hd=${hd}&jcd=${jcd}&rno=${rno}`;
+  }
+
+  function parseNumber(text) {
+    const match = String(text || "").replaceAll(",", "").match(/-?\\d+(?:\\.\\d+)?/);
+    return match ? Number(match[0]) : null;
+  }
+
+  function normalizeSpaces(text) {
+    return String(text || "")
+      .replace(/\\u3000/g, " ")
+      .replace(/\\s+/g, " ")
+      .trim();
+  }
+
+  function parseOfficialRaceListHtml(html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const rows = [...doc.querySelectorAll("tr")];
+    const racers = [];
+
+    for (const row of rows) {
+      const text = normalizeSpaces(row.textContent);
+      const laneMatch = text.match(/^([1-6１-６])\\s/);
+      if (!laneMatch) continue;
+
+      const lane = Number(
+        laneMatch[1]
+          .replace("１","1").replace("２","2").replace("３","3")
+          .replace("４","4").replace("５","5").replace("６","6")
+      );
+
+      if (racers.some((racer) => racer.lane === lane)) continue;
+
+      const cells = [...row.querySelectorAll("th,td")]
+        .map((cell) => normalizeSpaces(cell.textContent))
+        .filter(Boolean);
+
+      const racerCell = cells.find((cell) => /\\d{4}\\s*\\/\\s*(A1|A2|B1|B2)/.test(cell));
+      if (!racerCell) continue;
+
+      const classMatch = racerCell.match(/\\d{4}\\s*\\/\\s*(A1|A2|B1|B2)\\s+(.+?)(?:\\s+[^\\s\\/]+\\/[^\\s\\/]+|\\s+\\d+歳)/);
+      const racerClass = classMatch ? classMatch[1] : "";
+      const racerName = classMatch ? normalizeSpaces(classMatch[2]) : "";
+
+      const weightMatch = racerCell.match(/(\\d{2}(?:\\.\\d)?)kg/);
+      const weight = weightMatch ? Number(weightMatch[1]) : null;
+
+      const stCell = cells.find((cell) => /F\\d/.test(cell) && /L\\d/.test(cell));
+      let averageStart = null;
+      if (stCell) {
+        const nums = stCell.match(/0\\.\\d{2}/g);
+        if (nums?.length) averageStart = Number(nums[nums.length - 1]);
+      }
+
+      const numericCells = cells.filter((cell) => {
+        const nums = cell.match(/\\d+(?:\\.\\d+)?/g);
+        return nums && nums.length >= 2 && !/歳|kg|F\\d|L\\d/.test(cell);
+      });
+
+      const extractNumbers = (cell) => {
+        const nums = (cell || "").match(/\\d+(?:\\.\\d+)?/g) || [];
+        return nums.map(Number);
+      };
+
+      const national = extractNumbers(numericCells[0]);
+      const local = extractNumbers(numericCells[1]);
+      const motor = extractNumbers(numericCells[2]);
+      const boat = extractNumbers(numericCells[3]);
+
+      racers.push({
+        lane,
+        racerName,
+        racerClass,
+        weight,
+        averageStart,
+        nationalWinRate: national[0] ?? null,
+        localWinRate: local[0] ?? null,
+        motorPlaceRate: motor.length >= 2 ? motor[motor.length - 2] : null,
+        boatPlaceRate: boat.length >= 2 ? boat[boat.length - 2] : null
+      });
+    }
+
+    return racers.sort((a, b) => a.lane - b.lane);
+  }
+
+  function parseOfficialBeforeInfoHtml(html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const rows = [...doc.querySelectorAll("tr")];
+    const racers = [];
+
+    for (const row of rows) {
+      const cells = [...row.querySelectorAll("th,td")]
+        .map((cell) => normalizeSpaces(cell.textContent))
+        .filter(Boolean);
+
+      const text = normalizeSpaces(row.textContent);
+      const laneMatch = text.match(/^([1-6１-６])\\s/);
+      if (!laneMatch) continue;
+
+      const lane = Number(
+        laneMatch[1]
+          .replace("１","1").replace("２","2").replace("３","3")
+          .replace("４","4").replace("５","5").replace("６","6")
+      );
+
+      if (racers.some((racer) => racer.lane === lane)) continue;
+
+      const weightCell = cells.find((cell) => /^\\d{2}(?:\\.\\d)?kg$/.test(cell));
+      const weight = weightCell ? parseNumber(weightCell) : null;
+
+      const exhibitionCell = cells.find((cell) => /^6\\.\\d{2}$/.test(cell));
+      const exhibitionTime = exhibitionCell ? Number(exhibitionCell) : null;
+
+      racers.push({ lane, weight, exhibitionTime });
+    }
+
+    const validTimes = racers
+      .filter((racer) => Number.isFinite(racer.exhibitionTime))
+      .sort((a, b) => a.exhibitionTime - b.exhibitionTime);
+
+    validTimes.forEach((racer, index) => {
+      racer.exhibitionRank = index + 1;
+    });
+
+    return racers.sort((a, b) => a.lane - b.lane);
+  }
+
+  async function fetchOfficialHtml(url) {
+    const response = await fetch(url, {
+      method: "GET",
+      mode: "cors",
+      cache: "no-store",
+      credentials: "omit"
+    });
+
+    if (!response.ok) {
+      throw new Error(`公式データ取得に失敗しました（HTTP ${response.status}）。`);
+    }
+
+    return response.text();
+  }
+
+  function applyOfficialRaceData(raceList, beforeInfo) {
+    if (!Array.isArray(raceList) || raceList.length !== 6) {
+      throw new Error("公式出走表から6艇分を正しく読み取れませんでした。");
+    }
+
+    raceList.forEach((racer) => {
+      const lane = racer.lane;
+      setInputValue(`racerName${lane}`, racer.racerName);
+      setInputValue(`racerClass${lane}`, racer.racerClass);
+      setInputValue(`nationalWinRate${lane}`, racer.nationalWinRate);
+      setInputValue(`localWinRate${lane}`, racer.localWinRate);
+      setInputValue(`motorPlaceRate${lane}`, racer.motorPlaceRate);
+      setInputValue(`boatPlaceRate${lane}`, racer.boatPlaceRate);
+      setInputValue(`averageStart${lane}`, racer.averageStart);
+      setInputValue(`weight${lane}`, racer.weight);
+      setInputValue(`entryCourse${lane}`, lane);
+    });
+
+    if (Array.isArray(beforeInfo)) {
+      beforeInfo.forEach((racer) => {
+        const lane = racer.lane;
+        if (Number.isFinite(racer.weight)) setInputValue(`weight${lane}`, racer.weight);
+        if (Number.isFinite(racer.exhibitionTime)) setInputValue(`exhibitionTime${lane}`, racer.exhibitionTime);
+        if (Number.isInteger(racer.exhibitionRank)) setInputValue(`exhibitionRank${lane}`, racer.exhibitionRank);
+      });
+    }
+  }
+
+  async function importOfficialData() {
+    const button = $("importDataButton");
+    const raceDate = $("raceDate").value;
+    const venue = $("raceVenue").value;
+    const raceNumber = $("raceNumber").value;
+
+    if (!raceDate || !venue || !raceNumber) {
+      showToast("開催日・開催場・レース番号を先に選択してください。");
+      return;
+    }
+
+    const raceListUrl = buildOfficialUrl("racelist", raceDate, venue, raceNumber);
+    const beforeInfoUrl = buildOfficialUrl("beforeinfo", raceDate, venue, raceNumber);
+
+    button.disabled = true;
+    button.textContent = "公式データ取得中…";
+    setStatus("データ取得中", "warning");
+
+    try {
+      const raceListHtml = await fetchOfficialHtml(raceListUrl);
+      const raceList = parseOfficialRaceListHtml(raceListHtml);
+
+      let beforeInfo = [];
+      try {
+        const beforeInfoHtml = await fetchOfficialHtml(beforeInfoUrl);
+        beforeInfo = parseOfficialBeforeInfoHtml(beforeInfoHtml);
+      } catch (beforeError) {
+        console.warn("直前情報はまだ取得できませんでした。", beforeError);
+      }
+
+      applyOfficialRaceData(raceList, beforeInfo);
+      saveLastInput();
+
+      const hasExhibition = beforeInfo.some((item) => Number.isFinite(item.exhibitionTime));
+
+      showToast(
+        hasExhibition
+          ? "公式出走表・直前情報を入力しました。"
+          : "公式出走表を入力しました。展示情報は公開後に再取得してください。",
+        4200
+      );
+      setStatus("公式データ取得済み");
+    } catch (error) {
+      console.error(error);
+
+      const corsLikely =
+        error instanceof TypeError ||
+        /Failed to fetch|NetworkError|CORS/i.test(String(error?.message));
+
+      if (corsLikely) {
+        showToast(
+          "ブラウザの外部通信制限で公式サイトへ直接接続できません。次段階で中継方式を追加します。",
+          5200
+        );
+        setStatus("自動取得接続待ち", "warning");
+      } else {
+        showToast(error.message || "公式データ取得に失敗しました。", 4800);
+        setStatus("取得エラー", "danger");
+      }
+    } finally {
+      button.disabled = false;
+      button.textContent = "公式データを取得";
+    }
+  }
 
   const state = {
     currentPrediction: null,
@@ -850,6 +1109,7 @@
     );
     $("resetRaceButton").addEventListener("click", resetRaceInput);
     $("copyPreviousRaceButton").addEventListener("click", loadLastInput);
+    $("importDataButton").addEventListener("click", importOfficialData);
 
     $("historyVenueFilter").addEventListener("change", renderHistoryTable);
     $("historyResultFilter").addEventListener("change", renderHistoryTable);
@@ -930,6 +1190,11 @@
 
   function initialize() {
     setText("appVersion", `Version ${APP_VERSION}`);
+    const importButton = $("importDataButton");
+    if (importButton) {
+      importButton.disabled = false;
+      importButton.textContent = "公式データを取得";
+    }
     setTodayAsDefault();
     loadSettings();
     bindEvents();
