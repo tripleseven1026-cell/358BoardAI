@@ -22,7 +22,8 @@
   const LAST_INPUT_KEY = "358BoardAI.lastInput.v1";
 
   const OFFICIAL_BASE_URL = "https://www.boatrace.jp/owpc/pc/race";
-
+  const RELAY_BASE_URL = "https://358boardai-relay.tripleseven1026.workers.dev/race";　 
+   
   const VENUE_CODES = Object.freeze({
     "桐生": "01", "戸田": "02", "江戸川": "03", "平和島": "04",
     "多摩川": "05", "浜名湖": "06", "蒲郡": "07", "常滑": "08",
@@ -45,7 +46,7 @@
       throw new Error("開催日・開催場・レース番号を確認してください。");
     }
 
-    return `${OFFICIAL_BASE_URL}/${kind}?hd=${hd}&jcd=${jcd}&rno=${rno}`;
+　return `${RELAY_BASE_URL}?kind=${kind}&hd=${hd}&jcd=${jcd}&rno=${rno}`; 
   }
 
   function parseNumber(text) {
