@@ -151,19 +151,9 @@
       /^[1-6１-６]$/.test(cell)
     );
 
-    if (!laneCell) {
-      continue;
-    }
+    const lane = racers.length + 1;
 
-    const lane = Number(
-      laneCell
-        .replace("１", "1")
-        .replace("２", "2")
-        .replace("３", "3")
-        .replace("４", "4")
-        .replace("５", "5")
-        .replace("６", "6")
-    );
+    
 
     if (
       !Number.isInteger(lane) ||
