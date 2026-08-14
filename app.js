@@ -281,6 +281,13 @@
       try {
         const beforeInfoHtml = await fetchOfficialHtml(beforeInfoUrl);
         beforeInfo = parseOfficialBeforeInfoHtml(beforeInfoHtml);
+            const waterInfo = parseOfficialWaterInfoHtml(beforeInfoHtml);
+      setInputValue("weather", waterInfo.weather);
+      setInputValue("windDirection", waterInfo.windDirection);
+      setInputValue("windSpeed", waterInfo.windSpeed);
+      setInputValue("waveHeight", waterInfo.waveHeight);
+      setInputValue("airTemperature", waterInfo.airTemperature);
+      setInputValue("waterTemperature", waterInfo.waterTemperature);
       } catch (beforeError) {
         console.warn("直前情報はまだ取得できませんでした。", beforeError);
       }
